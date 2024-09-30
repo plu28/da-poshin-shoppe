@@ -13,7 +13,7 @@ def get_catalog():
 
     # grabs the green potions from the database
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory"))
+        result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
 
     num_green_potions = result.fetchone().num_green_potions
     if num_green_potions == 0:
@@ -23,7 +23,7 @@ def get_catalog():
         {
             "sku": "GREEN_POTION",
             "name": "green potion",
-            "quantity": result.fetchone().num_green_potions,
+            "quantity": num_green_potions,
             "price": 100,
             "potion_type": [0,100,0,0],
         }

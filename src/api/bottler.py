@@ -63,12 +63,15 @@ def get_bottle_plan():
     # This is how many bottles im creating
     bottle_quantity = green_ml // 100
 
-    return [
-            {
-                "potion_type": [0, 100, 0, 0],
-                "quantity": bottle_quantity,
-            }
-        ]
+    if bottle_quantity >= 1:
+        return [
+                {
+                    "potion_type": [0, 100, 0, 0],
+                    "quantity": bottle_quantity,
+                }
+            ]
+    else:
+        return []
 
 if __name__ == "__main__":
     print(get_bottle_plan())
