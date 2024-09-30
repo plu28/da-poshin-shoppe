@@ -49,6 +49,9 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_green_ml = {new_num_green_ml}, gold = {new_gold}"))
 
+    # LOGGING
+    # with db.engine.begin() as connection:
+    #     log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint, request, response) VALUES (\"/deliver/{order_id}\",{{}})"))
     print(f"barrels delivered: {barrels_delivered} order_id: {order_id}")
 
     return "OK"

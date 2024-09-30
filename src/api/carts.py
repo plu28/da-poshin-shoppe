@@ -126,6 +126,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
 class CartCheckout(BaseModel):
     payment: str
 
+# QUESTION: whats the point of cart_checkout??
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
@@ -144,9 +145,16 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     # update gold in inventory
     with db.engine.begin() as connection:
         inventory = connection.execute(sqlalchemy.text(f"SELECT * FROM global_inventory"))
-    current_gold = inventory.fetchone().gold
+    inventory = inventory.fetchone()
+    current_gold = inventory.gold
+    current_stock = inventory.green
 
-    with db.engine.begin() as connection:
-        inventory = connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold={current_gold + total_gold_paid}"))
+    # check if you even have enough potions in inventory to fulfill the order
+    if potions_bought > current_stock:
+        return []
 
-    return {"total_potions_bought": potions_bought, "total_gold_paid": cart_green_ml}
+    else:
+        with db.engine.begin() as connection:
+            inventory = connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold={current_gold + total_gold_paid}"))
+
+        return {"total_potions_bought": potions_bought, "total_gold_paid": cart_green_ml}
