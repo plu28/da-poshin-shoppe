@@ -72,3 +72,7 @@ def get_bottle_plan():
 
 if __name__ == "__main__":
     print(get_bottle_plan())
+
+# todo: check if you have enough gold to even buy barrels in barrel plan
+# todo: check if you even have enough ml to mix into potions
+# todo: figure out selling
