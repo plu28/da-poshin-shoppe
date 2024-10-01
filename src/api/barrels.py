@@ -77,18 +77,18 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     # what does roxanne's call look like?
     # will the barrels be diluted or will they be 100 of a color?
     for barrel in wholesale_catalog:
-        if (barrel.potion_type == [0,100,0,0]):
-            if (green_quantity < 10):
-                return [
-                    {
-                        "sku": "SMALL_GREEN_BARREL",
-                        "quantity": 1,
-                    }
-                ]
-            else:
-                return []
+        # if (barrel.potion_type == [0,100,0,0]):
+        if (green_quantity < 10):
+            return [
+                {
+                    "sku": "SMALL_GREEN_BARREL",
+                    "quantity": 1,
+                }
+            ]
         else:
             return []
+    else:
+        return []
 
 
 
