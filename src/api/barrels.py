@@ -21,22 +21,24 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
+    request = f"{{barrels_delivered: {barrels_delivered}, order_id: {order_id}}}"
+    response = "OK"
+
+    # Selecting current state of inventory
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT gold, num_green_ml FROM global_inventory"))
 
-    # info to be updated
+    # result is a CursorResult type which must be converted
     row = result.fetchone()
     current_gold = row.gold
     num_green_ml = row.num_green_ml
 
-    # getting barrel info
     barrel_cost = 0
     num_added_green_ml = 0 # for now, we're only adding green ml
 
-
-    # iterating over all the delivered barrels for the future, but version 1 expects only 1 barrel though in the list
+    # iterating over all the delivered barrels for the future, but version 1 expects only 1 barrel in the list
     for barrel in barrels_delivered:
-        print(f"Roxanne is delivering: {barrel.sku}, {barrel.ml_per_barrel}, {barrel.potion_type}, {barrel.price}, {barrel.quantity}")
+        # print(f"Roxanne is delivering: {barrel.sku}, {barrel.ml_per_barrel}, {barrel.potion_type}, {barrel.price}, {barrel.quantity}")
         barrel_cost += (barrel.price * barrel.quantity)
         num_added_green_ml += (barrel.ml_per_barrel * barrel.quantity)
 
@@ -51,8 +53,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 
     # LOGGING
     # with db.engine.begin() as connection:
-    #     log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint, request, response) VALUES (\"/deliver/{order_id}\",{{}})"))
-    print(f"barrels delivered: {barrels_delivered} order_id: {order_id}")
+    #     log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint, request, response) VALUES (\"/deliver/{order_id}\",'{{\"barrels_delivered\": \"{barrels_delivered}\", \"order_id\": \"{order_id}\"}}', '{{\"response\":\"{response}\"}}'"))
 
     return "OK"
 
@@ -67,15 +68,11 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory"))
 
     green_quantity = result.fetchone().num_green_potions
-    print(type(green_quantity))
 
     # iterate over what roxanne's selling
     # what does roxanne's call look like?
     # will the barrels be diluted or will they be 100 of a color?
     for barrel in wholesale_catalog:
-        with open("roxanne.txt", "w") as file:
-            file.write(f"Roxanne is selling: {barrel.sku}, {barrel.ml_per_barrel}, {barrel.potion_type}, {barrel.price}, {barrel.quantity}")
-
         if (barrel.potion_type == [0,100,0,0]):
             if (green_quantity < 10):
                 return [
@@ -84,6 +81,10 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         "quantity": 1,
                     }
                 ]
+            else:
+                return []
+        else:
+            return []
 
 
 
