@@ -17,6 +17,10 @@ class PotionInventory(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
     """ """
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/bottler/deliver/{order_id}')"))
+
     # get current potions and ml
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT num_green_ml, num_green_potions FROM global_inventory"))
@@ -29,9 +33,6 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     # subtract green_ml
     # iterating over all the delivered barrels for the future, but version 1 expects only 1 barrel though in the list
     for potions in potions_delivered:
-
-        with open("bobo.txt", "w") as file:
-            file.write(f"Bobo is delivering: {potions.potion_type} of which there are {potions.quantity}")
         num_green_potions += potions.quantity
         num_green_ml -= (100 * potions.quantity)
 
@@ -49,6 +50,9 @@ def get_bottle_plan():
     """
     Go from barrel to bottle.
     """
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/bottler/plan')"))
 
     # Each bottle has a quantity of what proportion of red, blue, and
     # green potion to add.

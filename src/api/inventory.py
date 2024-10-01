@@ -13,6 +13,10 @@ router = APIRouter(
 @router.get("/audit")
 def get_inventory():
     """ """
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/inventory/audit')"))
+
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
     row = result.fetchone()
@@ -29,6 +33,9 @@ def get_capacity_plan():
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional
     capacity unit costs 1000 gold.
     """
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/inventory/plan')"))
 
     return {
         "potion_capacity": 0,
@@ -46,5 +53,8 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional
     capacity unit costs 1000 gold.
     """
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/inventory/deliver/{order_id}')"))
 
     return "OK"

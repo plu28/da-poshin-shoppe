@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from src.api import auth
 import sqlalchemy
+from json import dumps
 from src import database as db
 router = APIRouter(
     prefix="/barrels",
@@ -21,8 +22,6 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
-    request = f"{{barrels_delivered: {barrels_delivered}, order_id: {order_id}}}"
-    response = "OK"
 
     # Selecting current state of inventory
     with db.engine.begin() as connection:
@@ -53,7 +52,9 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 
     # LOGGING
     # with db.engine.begin() as connection:
-    #     log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint, request, response) VALUES (\"/deliver/{order_id}\",'{{\"barrels_delivered\": \"{barrels_delivered}\", \"order_id\": \"{order_id}\"}}', '{{\"response\":\"{response}\"}}'"))
+    #     log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint, request, response) VALUES ('/deliver/{order_id}', '{{\"barrels_delivered\": \"{barrels_delivered}\", \"order_id\": \"{order_id}\"}}', '{{\"response\": \"{response}\"}}')"))
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/barrels/deliver/{order_id}')"))
 
     return "OK"
 
@@ -63,6 +64,9 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
     # TODO: make sure there is enough gold for the purchase before sending out the purchase request
     # print(f"WHOLESALE_CATALOG: {type(wholesale_catalog[0].price)}")
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/barrels/plan')"))
 
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory"))

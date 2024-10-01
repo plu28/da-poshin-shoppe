@@ -18,5 +18,8 @@ def post_time(timestamp: Timestamp):
     """
     Share current time.
     """
-    return "OK"
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/current_time')"))
 
+    return "OK"

@@ -80,7 +80,9 @@ def post_visits(visit_id: int, customers: list[Customer]):
     """
     Which customers visited the shop today?
     """
-    print(f"ENDPOINT CALL: /visits/{visit_id}\ncustomers: {customers}")
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/carts/visits/{visit_id}')"))
 
     return [{"success": True}]
 
@@ -88,6 +90,10 @@ def post_visits(visit_id: int, customers: list[Customer]):
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/carts/create_cart')"))
+
     # cart_id = ASCII(new_cart.customer_name + new_cart.character_class + str(new_cart.level)) # WARNING: THIS cart_id METHOD MAY GENERATE DUPLICATE CART_ID's
     cart_id = random.randrange(10000,100000) # random number generator can still create two radom cart_id's that are the same
     print(f"ENDPOINT CALL: /create_cart \nnew_cart={new_cart}\ncustomer_id={cart_id}")
@@ -105,7 +111,10 @@ class CartItem(BaseModel):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
-    print(f"ENDPOINT CALL: /{cart_id}/items/{item_sku}\ncart_id={cart_id}\nitem_sku={item_sku}\ncart_item={cart_item}\ncart_item.quantity={cart_item.quantity}")
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/carts/{cart_id}/items/{item_sku}')"))
+    # print(f"ENDPOINT CALL: /{cart_id}/items/{item_sku}\ncart_id={cart_id}\nitem_sku={item_sku}\ncart_item={cart_item}\ncart_item.quantity={cart_item.quantity}")
     # currently, the shop only sells green potions so the item_sku is going to be GREEN_POTION
     # in the future, I am going to need another table that has its sku and mixture so I can update the table accordingly
     # THE FOLLOWING LINES ARE HARD-CODED ONLY FOR VERSION 1 AND WILL HAVE TO BE REMOVED FOR LATER VERSIONS
@@ -113,9 +122,9 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     with db.engine.begin() as connection:
         current = connection.execute(sqlalchemy.text(f"SELECT * FROM carts WHERE cart_id={cart_id}"))
 
-    current = current.fetchone() # convert to row
-    current_potion_quantity = current.potion_quantity
-    current_green_ml = current.green_ml
+    row = current.fetchone() # convert to row
+    current_potion_quantity = row.potion_quantity
+    current_green_ml = row.green_ml
 
     with db.engine.begin() as connection:
         update_cursor = connection.execute(sqlalchemy.text(f"UPDATE carts SET potion_quantity={current_potion_quantity + cart_item.quantity}, green_ml={current_green_ml + (cart_item.quantity * 100)} WHERE cart_id={cart_id}"))
@@ -130,6 +139,9 @@ class CartCheckout(BaseModel):
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/carts/{cart_id}/checkout')"))
     # calculate price based on ml
     # 1 green ml = 1 gold
     COST_PER_GREEN_ML = 1
@@ -147,7 +159,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         inventory = connection.execute(sqlalchemy.text(f"SELECT * FROM global_inventory"))
     inventory = inventory.fetchone()
     current_gold = inventory.gold
-    current_stock = inventory.green
+    current_stock = inventory.num_green_ml
 
     # check if you even have enough potions in inventory to fulfill the order
     if potions_bought > current_stock:

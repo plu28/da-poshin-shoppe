@@ -10,6 +10,9 @@ def get_catalog():
     """
     Each unique item combination must have only a single price.
     """
+    # LOGGING
+    with db.engine.begin() as connection:
+        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/catalog')"))
 
     # grabs the green potions from the database
     with db.engine.begin() as connection:
