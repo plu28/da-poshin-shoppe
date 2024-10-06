@@ -4,6 +4,9 @@ from src.api import auth
 import math
 import sqlalchemy
 from src import database as db
+from src import global_inventory as gi
+from src import log
+
 router = APIRouter(
     prefix="/inventory",
     tags=["inventory"],
@@ -14,17 +17,11 @@ router = APIRouter(
 def get_inventory():
     """ """
     # LOGGING
-    with db.engine.begin() as connection:
-        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/inventory/audit')"))
+    log.post_log('/inventory/audit')
 
-    with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-    row = result.fetchone()
-    number_of_potions = row.num_green_potions
-    ml_in_barrels = row.num_green_ml
-    gold = row.gold
-
-    return {"number_of_potions": number_of_potions, "ml_in_barrels": ml_in_barrels, "gold": gold}
+    global_inventory = gi.GlobalInventory().retrieve()
+    ml_in_barrels = global_inventory.red_ml + global_inventory.green_ml + global_inventory.blue_ml + global_inventory.dark_ml
+    return {"number_of_potions": global_inventory.potion_stock, "ml_in_barrels": ml_in_barrels, "gold": global_inventory.gold}
 
 # Gets called once a day
 @router.post("/plan")

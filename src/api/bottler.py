@@ -67,6 +67,8 @@ def get_bottle_plan():
     # This is how many bottles im creating
     bottle_quantity = green_ml // 100
 
+    # V2 bottle plan: just always have 3 of each potion in stock
+
     if bottle_quantity >= 1:
         return [
                 {

@@ -2,8 +2,14 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from src.api import auth
 import sqlalchemy
+import json
 from json import dumps
 from src import database as db
+from src import global_inventory as gi
+from src import log
+import numpy as np
+from bottler import get_bottle_plan
+
 router = APIRouter(
     prefix="/barrels",
     tags=["barrels"],
@@ -12,7 +18,6 @@ router = APIRouter(
 
 class Barrel(BaseModel):
     sku: str
-
     ml_per_barrel: int
     potion_type: list[int]
     price: int
@@ -62,33 +67,33 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
-    # TODO: make sure there is enough gold for the purchase before sending out the purchase request
-    # print(f"WHOLESALE_CATALOG: {type(wholesale_catalog[0].price)}")
-    # LOGGING
+    # Log endpoint
+    log.post_log('barrels/plan')
+
+    # Log everything roxanne is selling
     with db.engine.begin() as connection:
-        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/barrels/plan')"))
+        for barrel in wholesale_catalog:
+            insert = connection.execute(sqlalchemy.text(f"INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES ({barrel.sku}, {barrel.ml_per_barrel}, {barrel.potion_type}, {barrel.price}, {barrel.quantity})"))
 
-    with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory"))
+    global_inventory = gi.GlobalInventory().retrieve() # Getting current state of inventory
+    current_gold = global_inventory.gold
 
-    green_quantity = result.fetchone().num_green_potions
+    # TODO: Some logic for handling barrel purchasing
+    # We dont want to buy more barrels then we can afford
+    # Barrels calls bottler plan and figures out what the current plan is
+    # Buys enough barrels for this bottling to occur
 
-    # iterate over what roxanne's selling
-    # what does roxanne's call look like?
-    # will the barrels be diluted or will they be 100 of a color?
-    for barrel in wholesale_catalog:
-        # if (barrel.potion_type == [0,100,0,0]):
-        if (green_quantity < 10):
-            return [
-                {
-                    "sku": "SMALL_GREEN_BARREL",
-                    "quantity": 1,
-                }
-            ]
-        else:
-            return []
-    else:
-        return []
+    bottle_plan = get_bottle_plan() # Get bottler plan
+    red_need = green_need = blue_need = dark_need = 0 # Count up exactly how much of each type I need to buy
+
+    # Adding up the total amount of ml quantities using numpy vector operations
+    np_arr = np.array([0,0,0,0])
+    for purchase in bottle_plan:
+        np_arr += purchase['quantity'] * np.array(purchase['potion_type'])
+
+
+
+    return "OK"
 
 
 

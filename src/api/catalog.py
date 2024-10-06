@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 import sqlalchemy
 from src import database as db
+from src import log
+from src import jsonify
 
 router = APIRouter()
 
@@ -11,33 +13,16 @@ def get_catalog():
     Each unique item combination must have only a single price.
     """
     # LOGGING
-    with db.engine.begin() as connection:
-        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/catalog')"))
+    log.post_log("/catalog")
 
     # grabs the green potions from the database
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
+        result = connection.execute(sqlalchemy.text("SELECT * FROM catalog WHERE quantity > 0"))
+    row_list = result.fetchall()
 
-    num_green_potions = result.fetchone().num_green_potions
-    if num_green_potions == 0:
-        return []
-
-    return [
-        {
-            "sku": "GREEN_POTION",
-            "name": "green potion",
-            "quantity": num_green_potions,
-            "price": 100,
-            "potion_type": [0,100,0,0],
-        }
-    ]
-
-    # return [
-    #         {
-    #             "sku": "RED_POTION_0",
-    #             "name": "red potion",
-    #             "quantity": 1,
-    #             "price": 100,
-    #             "potion_type": [100, 0, 0, 0],
-    #         }
-    #     ]
+    # Currently just selects the top 6 rows.
+    # Future: implement better logic for selecting what potions need to be sold
+    if len(row_list) < 6:
+        return jsonify.rows_to_json(row_list)
+    else:
+        return jsonify.rows_to_json(row_list[0:6])
