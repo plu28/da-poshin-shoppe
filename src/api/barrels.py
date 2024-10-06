@@ -8,7 +8,7 @@ from src import database as db
 from src import global_inventory as gi
 from src import log
 import numpy as np
-from bottler import get_bottle_plan
+from . import bottler
 
 router = APIRouter(
     prefix="/barrels",
@@ -71,9 +71,18 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     log.post_log('barrels/plan')
 
     # Log everything roxanne is selling
+    log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
     with db.engine.begin() as connection:
         for barrel in wholesale_catalog:
-            insert = connection.execute(sqlalchemy.text(f"INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES ({barrel.sku}, {barrel.ml_per_barrel}, {barrel.potion_type}, {barrel.price}, {barrel.quantity})"))
+            connection.execute(log_query,
+                {
+                    'sku': barrel.sku,
+                    'ml_per_barrel': barrel.ml_per_barrel,
+                    'potion_type': barrel.potion_type,
+                    'price': barrel.price,
+                    'quantity': barrel.quantity
+                }
+            )
 
     global_inventory = gi.GlobalInventory().retrieve() # Getting current state of inventory
     current_gold = global_inventory.gold
@@ -83,7 +92,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     # Barrels calls bottler plan and figures out what the current plan is
     # Buys enough barrels for this bottling to occur
 
-    bottle_plan = get_bottle_plan() # Get bottler plan
+    bottle_plan = bottler.get_bottle_plan() # Get bottler plan
     red_need = green_need = blue_need = dark_need = 0 # Count up exactly how much of each type I need to buy
 
     # Adding up the total amount of ml quantities using numpy vector operations
