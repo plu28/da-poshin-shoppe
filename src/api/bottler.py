@@ -72,6 +72,22 @@ def get_bottle_plan():
     log.post_log('/plan')
     # DUMB LOGIC: Bottle into 5 red potions
     catalog = ct.CatalogInventory().retrieve("100red")
+    # Insert if red isn't already in there
+    if (catalog == None):
+        insert_query = sqlalchemy.text("INSERT INTO catalog (sku, name, quantity, price, potion_type) VALUES (:sku, :name, :quantity, :price, :potion_type)")
+        with db.engine.begin() as connection:
+            connection.execute(insert_query,
+                {
+                    'sku': "100red",
+                    'name': "100red",
+                    'quantity': 0,
+                    'price': 50,
+                    'potion_type': [100,0,0,0]
+                }
+            )
+        # Retrieve again
+        catalog = ct.CatalogInventory().retrieve("100red")
+
     return [
             {
                 "potion_type": [100, 0, 0, 0],
