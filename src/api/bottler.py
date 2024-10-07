@@ -53,7 +53,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 )
         else:
             # Update existing sku
-            update_query = sqlalchemy.text("UPDATE global_inventory SET quantity = :quantity WHERE sku = :sku")
+            update_query = sqlalchemy.text("UPDATE catalog SET quantity = :quantity WHERE sku = :sku")
             with db.engine.begin() as connection:
                 connection.execute(update_query,
                     {
