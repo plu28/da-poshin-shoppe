@@ -2,7 +2,7 @@ from src import database as db
 import sqlalchemy
 
 class CatalogInventory():
-    def __init__(self, sku="", name="", quantity=0, price=0, potion_type = [0,0,0,0]):
+    def __init__(self, sku="", name="", quantity=0, price=0, potion_type=[0,0,0,0]):
         self.sku = sku
         self.name = name
         self.quantity = quantity

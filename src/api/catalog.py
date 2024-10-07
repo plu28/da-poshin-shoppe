@@ -15,10 +15,11 @@ def get_catalog():
     # LOGGING
     log.post_log("/catalog")
 
-    # grabs the green potions from the database
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text("SELECT * FROM catalog WHERE quantity > 0"))
     row_list = result.fetchall()
+    if (row_list == []):
+        return "EMPTY CATALOG"
 
     # Currently just selects the top 6 rows.
     # Future: implement better logic for selecting what potions need to be sold

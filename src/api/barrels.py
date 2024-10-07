@@ -71,7 +71,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
     # Log endpoint
-    log.post_log('barrels/plan')
+    log.post_log('/barrels/plan')
 
     # Log everything roxanne is selling
     log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
@@ -103,5 +103,13 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     for purchase in bottle_plan:
         np_arr += purchase['quantity'] * np.array(purchase['potion_type'])
 
-    # TODO: FINISH BARREL LOGIC!
-    return "OK"
+    # TODO: FINISH BARREL LOGIC! CURRENT DUMB LOGIC IS BUYING RED BARRELS
+    if (np_arr[0] == 500) and (current_gold >= 100):
+        return [
+            {
+                'sku': 'SMALL_RED_BARREL',
+                'quantity': 1
+            }
+        ]
+
+    return "NO BARREL PURCHASE"
