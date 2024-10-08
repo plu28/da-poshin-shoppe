@@ -3,11 +3,14 @@ from enum import Enum
 from pydantic import BaseModel
 from src.api import auth
 import sqlalchemy
+import json
+import re
 from src import database as db
 from src import global_inventory as gi
 from src import catalog_table as ct
 from src import log
 from src import prices
+from src import strategy as strat
 
 router = APIRouter(
     prefix="/bottler",
@@ -23,8 +26,6 @@ class PotionInventory(BaseModel):
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
     """ """
     log.post_log(f"/deliver/{order_id}")
-
-    global_inventory = gi.GlobalInventory().retrieve()
 
     # add potions to catalog table. if the potion doesn't exist, insert a new row
     for potion in potions_delivered:
@@ -62,6 +63,34 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                     }
                 )
 
+        # Decrement global inventory by how much we just bottled
+        red_loss = green_loss = blue_loss = dark_loss = 0
+        for sku, quantity in strat.Strategy().retrieve_as_dict().items():
+            # Since sku corresponds to potion makeup, I can use regex
+            for ml_quantity, color in re.findall("(\d+)([a-z]+)", sku):
+                ml_quantity = int(ml_quantity) # typecasting to int
+                if color == "red":
+                    red_loss += ml_quantity * quantity
+                elif color == "green":
+                    green_loss += ml_quantity * quantity
+                elif color == "blue":
+                    blue_loss += ml_quantity * quantity
+                elif color == "dark":
+                    dark_loss += ml_quantity * quantity
+
+        global_inventory = gi.GlobalInventory().retrieve()
+        update_query = sqlalchemy.text("UPDATE global_inventory SET red_ml = :red_ml, green_ml = :green_ml, blue_ml = :blue_ml, dark_ml = :dark_ml")
+        print(f"{global_inventory.red_ml} - {red_loss}")
+        with db.engine.begin() as connection:
+            connection.execute(update_query,
+                {
+                    'red_ml': global_inventory.red_ml - red_loss,
+                    'green_ml': global_inventory.green_ml - green_loss,
+                    'blue_ml': global_inventory.blue_ml - blue_loss,
+                    'dark_ml': global_inventory.dark_ml - dark_loss
+                }
+            )
+
     return "OK"
 
 @router.post("/plan")
@@ -69,31 +98,11 @@ def get_bottle_plan():
     """
     Go from barrel to bottle.
     """
-    log.post_log('/plan')
-    # DUMB LOGIC: Bottle into 5 red potions
-    catalog = ct.CatalogInventory().retrieve("100red")
-    # Insert if red isn't already in there
-    if (catalog == None):
-        insert_query = sqlalchemy.text("INSERT INTO catalog (sku, name, quantity, price, potion_type) VALUES (:sku, :name, :quantity, :price, :potion_type)")
-        with db.engine.begin() as connection:
-            connection.execute(insert_query,
-                {
-                    'sku': "100red",
-                    'name': "100red",
-                    'quantity': 0,
-                    'price': 50,
-                    'potion_type': [100,0,0,0]
-                }
-            )
-        # Retrieve again
-        catalog = ct.CatalogInventory().retrieve("100red")
+    log.post_log('/bottler/plan')
 
-    return [
-            {
-                "potion_type": [100, 0, 0, 0],
-                "quantity": 5 - catalog.quantity,
-            }
-        ]
+    # Presumably, if we passed barrels, we should have enough ml to fulfill the strategy
+    return json.loads(json.dumps(strat.Strategy().retrieve_as_dict()))
+
 
 def type_to_sku(potion_type):
     sku = []
