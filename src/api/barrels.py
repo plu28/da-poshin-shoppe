@@ -80,23 +80,24 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     if (global_inventory.gold < 60):
         return "NO BARREL PURCHASE"
 
+    # TODO: UNCOMMENT AFTER LOGGING WHAT HER INVENTORY LOOKS LIKE
     # Drop what roxanne sold in the last barrels call
     # with db.engine.begin() as connection:
     #     connection.execute(sqlalchemy.text("DELETE FROM roxanne"))
 
     # Log everything roxanne is selling
-    # log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
-    # with db.engine.begin() as connection:
-    #     for barrel in wholesale_catalog:
-    #         connection.execute(log_query,
-    #             {
-    #                 'sku': barrel.sku,
-    #                 'ml_per_barrel': barrel.ml_per_barrel,
-    #                 'potion_type': barrel.potion_type,
-    #                 'price': barrel.price,
-    #                 'quantity': barrel.quantity
-    #             }
-    #         )
+    log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
+    with db.engine.begin() as connection:
+        for barrel in wholesale_catalog:
+            connection.execute(log_query,
+                {
+                    'sku': barrel.sku,
+                    'ml_per_barrel': barrel.ml_per_barrel,
+                    'potion_type': barrel.potion_type,
+                    'price': barrel.price,
+                    'quantity': barrel.quantity
+                }
+            )
 
     new_strat = strat.Strategy().retrieve_as_dict()
     while(sum(new_strat.values()) != 0):
@@ -177,6 +178,54 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         price += dark_barrel.price * quantity
                         barrels_im_buying.append({'sku':dark_barrel.sku, 'quantity': quantity})
 
+        # BAD Barrel fix: buy small barrels until ml need is for sure met
+        with db.engine.begin() as connection:
+            select_query = ("SELECT * FROM roxanne where sku = :sku")
+            small_red_barrel = connection.execute(select_query, {'sku': "SMALL_RED_BARREL" })
+            if (small_red_barrel == None):
+                raise ValueError("RED SELECT statement retrieved no entries")
+            quantity = (red_need // small_red_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
+            if (quantity > small_red_barrel.quantity):
+                # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
+                raise ValueError("Not enough RED barrels being offered by roxanne")
+            price += small_red_barrel.price * quantity
+            red_need -= small_red_barrel.ml_per_barrel * quantity
+            barrels_im_buying.append({'sku':small_red_barrel, 'quantity': quantity})
+
+        with db.engine.begin() as connection:
+            select_query = ("SELECT * FROM roxanne where sku = :sku")
+            small_blue_barrel = connection.execute(select_query, {'sku': "SMALL_BLUE_BARREL" })
+            if (small_blue_barrel == None):
+                raise ValueError("BLUE SELECT statement retrieved no entries")
+            quantity = (blue_need // small_blue_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
+            if (quantity > small_blue_barrel.quantity):
+                # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
+                raise ValueError("Not enough BLUE barrels being offered by roxanne")
+            price += small_blue_barrel.price * quantity
+            blue_need -= small_blue_barrel.ml_per_barrel * quantity
+            barrels_im_buying.append({'sku':small_blue_barrel, 'quantity': quantity})
+
+
+        with db.engine.begin() as connection:
+            select_query = ("SELECT * FROM roxanne where sku = :sku")
+            small_green_barrel = connection.execute(select_query, {'sku': "SMALL_GREEN_BARREL" })
+            if (small_green_barrel == None):
+                raise ValueError("GREEN SELECT statement retrieved no entries")
+            quantity = (green_need // small_green_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
+            if (quantity > small_green_barrel.quantity):
+                # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
+                raise ValueError("Not enough GREEN barrels being offered by roxanne")
+            price += small_green_barrel.price * quantity
+            green_need -= small_green_barrel.ml_per_barrel * quantity
+            barrels_im_buying.append({'sku':small_green_barrel, 'quantity': quantity})
+
+        # There are no small dark barrels.
+
+        # At this point, the total amount of ml we're buying should have our total need be met
+        if (red_need > 0 or green_need > 0 or blue_need > 0 or dark_need > 0):
+            print(f"UNMET NEED: {red_need},{green_need},{blue_need},{dark_need}")
+
+        print(f"{barrels_im_buying}")
         # Check if we can even afford this
         print(f"{price} <= {global_inventory.gold}")
         if (price <= global_inventory.gold):

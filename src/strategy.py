@@ -1,9 +1,3 @@
-strat = {
-    '100red': 5,
-    '50red20green30dark': 100,
-    '30green70blue': 5
-}
-
 from math import gcd
 from src import database as db
 import sqlalchemy
