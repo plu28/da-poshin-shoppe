@@ -19,7 +19,7 @@ def get_catalog():
         result = connection.execute(sqlalchemy.text("SELECT * FROM catalog WHERE quantity > 0"))
     row_list = result.fetchall()
     if (row_list == []):
-        return "EMPTY CATALOG"
+        return []
 
     # Currently just selects the top 6 rows.
     # Future: implement better logic for selecting what potions need to be sold

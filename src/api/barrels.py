@@ -78,12 +78,12 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     global_inventory = gi.GlobalInventory().retrieve() # Getting current state of inventory
 
     if (global_inventory.gold < 60):
-        return "NO BARREL PURCHASE"
+        return []
 
     # TODO: UNCOMMENT AFTER LOGGING WHAT HER INVENTORY LOOKS LIKE
     # Drop what roxanne sold in the last barrels call
-    # with db.engine.begin() as connection:
-    #     connection.execute(sqlalchemy.text("DELETE FROM roxanne"))
+    with db.engine.begin() as connection:
+        connection.execute(sqlalchemy.text("DELETE FROM roxanne"))
 
     # Log everything roxanne is selling
     log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
@@ -132,8 +132,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         # TODO: Rewrite to be more maintainable
 
         # Sort offerings by ml (larger barrels are better value)
-        if red_need > 0:
-            with db.engine.begin() as connection:
+        with db.engine.begin() as connection:
+            if red_need > 0:
                 red_barrels = connection.execute(sqlalchemy.text("SELECT * FROM roxanne WHERE potion_type = ARRAY[1,0,0,0] ORDER BY ml_per_barrel DESC")).fetchall()
                 for red_barrel in red_barrels:
                     # print(f"{red_barrel.sku}")
@@ -144,8 +144,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         red_need -= red_barrel.ml_per_barrel * quantity
                         price += red_barrel.price * quantity
                         barrels_im_buying.append({'sku':red_barrel.sku, 'quantity': quantity})
-        if green_need > 0:
-            with db.engine.begin() as connection:
+            if green_need > 0:
                 green_barrels = connection.execute(sqlalchemy.text("SELECT * FROM roxanne WHERE potion_type = ARRAY[0,1,0,0] ORDER BY ml_per_barrel DESC")).fetchall()
                 for green_barrel in green_barrels:
                     if green_barrel.ml_per_barrel <= green_need:
@@ -155,8 +154,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         green_need -= green_barrel.ml_per_barrel * quantity
                         price += green_barrel.price * quantity
                         barrels_im_buying.append({'sku':green_barrel.sku, 'quantity': quantity})
-        if blue_need > 0:
-            with db.engine.begin() as connection:
+            if blue_need > 0:
                 blue_barrels = connection.execute(sqlalchemy.text("SELECT * FROM roxanne WHERE potion_type = ARRAY[0,0,1,0] ORDER BY ml_per_barrel DESC")).fetchall()
                 for blue_barrel in blue_barrels:
                     if blue_barrel.ml_per_barrel <= blue_need:
@@ -166,8 +164,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         blue_need -= blue_barrel.ml_per_barrel * quantity
                         price += blue_barrel.price * quantity
                         barrels_im_buying.append({'sku':blue_barrel.sku, 'quantity': quantity})
-        if dark_need > 0:
-            with db.engine.begin() as connection:
+            if dark_need > 0:
                 dark_barrels = connection.execute(sqlalchemy.text("SELECT * FROM roxanne WHERE potion_type = ARRAY[0,0,0,1] ORDER BY ml_per_barrel DESC")).fetchall()
                 for dark_barrel in dark_barrels:
                     if dark_barrel.ml_per_barrel <= dark_need:
@@ -179,9 +176,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         barrels_im_buying.append({'sku':dark_barrel.sku, 'quantity': quantity})
 
         # BAD Barrel fix: buy small barrels until ml need is for sure met
-        with db.engine.begin() as connection:
-            select_query = ("SELECT * FROM roxanne where sku = :sku")
-            small_red_barrel = connection.execute(select_query, {'sku': "SMALL_RED_BARREL" })
+        if red_need > 0:
+            small_red_barrel = rox.Roxanne().retrieve("SMALL_RED_BARREL")
             if (small_red_barrel == None):
                 raise ValueError("RED SELECT statement retrieved no entries")
             quantity = (red_need // small_red_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
@@ -190,11 +186,10 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 raise ValueError("Not enough RED barrels being offered by roxanne")
             price += small_red_barrel.price * quantity
             red_need -= small_red_barrel.ml_per_barrel * quantity
-            barrels_im_buying.append({'sku':small_red_barrel, 'quantity': quantity})
+            barrels_im_buying.append({'sku':small_red_barrel.sku, 'quantity': quantity})
 
-        with db.engine.begin() as connection:
-            select_query = ("SELECT * FROM roxanne where sku = :sku")
-            small_blue_barrel = connection.execute(select_query, {'sku': "SMALL_BLUE_BARREL" })
+        if blue_need > 0:
+            small_blue_barrel = rox.Roxanne().retrieve("SMALL_BLUE_BARREL")
             if (small_blue_barrel == None):
                 raise ValueError("BLUE SELECT statement retrieved no entries")
             quantity = (blue_need // small_blue_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
@@ -203,12 +198,11 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 raise ValueError("Not enough BLUE barrels being offered by roxanne")
             price += small_blue_barrel.price * quantity
             blue_need -= small_blue_barrel.ml_per_barrel * quantity
-            barrels_im_buying.append({'sku':small_blue_barrel, 'quantity': quantity})
+            barrels_im_buying.append({'sku':small_blue_barrel.sku, 'quantity': quantity})
 
 
-        with db.engine.begin() as connection:
-            select_query = ("SELECT * FROM roxanne where sku = :sku")
-            small_green_barrel = connection.execute(select_query, {'sku': "SMALL_GREEN_BARREL" })
+        if green_need > 0:
+            small_green_barrel = rox.Roxanne().retrieve("SMALL_GREEN_BARREL")
             if (small_green_barrel == None):
                 raise ValueError("GREEN SELECT statement retrieved no entries")
             quantity = (green_need // small_green_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
@@ -217,7 +211,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 raise ValueError("Not enough GREEN barrels being offered by roxanne")
             price += small_green_barrel.price * quantity
             green_need -= small_green_barrel.ml_per_barrel * quantity
-            barrels_im_buying.append({'sku':small_green_barrel, 'quantity': quantity})
+            barrels_im_buying.append({'sku':small_green_barrel.sku, 'quantity': quantity})
 
         # There are no small dark barrels.
 
@@ -242,4 +236,4 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             largest_key = max(new_strat, key = new_strat.get)
             new_strat[largest_key] -= 1
 
-    return "NO BARREL PURCHASE"
+    return []
