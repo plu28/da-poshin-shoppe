@@ -65,18 +65,10 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 
         # Decrement global inventory by how much we just bottled
         red_loss = green_loss = blue_loss = dark_loss = 0
-        for sku, quantity in strat.Strategy().retrieve_as_dict().items():
-            # Since sku corresponds to potion makeup, I can use regex
-            for ml_quantity, color in re.findall("(\d+)([a-z]+)", sku):
-                ml_quantity = int(ml_quantity) # typecasting to int
-                if color == "red":
-                    red_loss += ml_quantity * quantity
-                elif color == "green":
-                    green_loss += ml_quantity * quantity
-                elif color == "blue":
-                    blue_loss += ml_quantity * quantity
-                elif color == "dark":
-                    dark_loss += ml_quantity * quantity
+        red_loss = red_ml * potion.quantity
+        green_loss = green_ml * potion.quantity
+        blue_loss = blue_ml * potion.quantity
+        dark_loss = dark_ml * potion.quantity
 
         global_inventory = gi.GlobalInventory().retrieve()
         update_query = sqlalchemy.text("UPDATE global_inventory SET red_ml = :red_ml, green_ml = :green_ml, blue_ml = :blue_ml, dark_ml = :dark_ml")
@@ -100,8 +92,29 @@ def get_bottle_plan():
     """
     log.post_log('/bottler/plan')
 
+    bottle_plan = []
+    mystrat = strat.Strategy().retrieve_as_dict()
+    for sku, quantity in mystrat.items():
+        red_ml = green_ml = blue_ml = dark_ml = 0
+        order = {}
+        # Since sku corresponds to potion makeup, I can use regex
+        for ml_quantity, color in re.findall("(\d+)([a-z]+)", sku):
+            ml_quantity = int(ml_quantity) # typecasting to int
+            if color == "red":
+                red_ml += ml_quantity
+            elif color == "green":
+                green_ml += ml_quantity
+            elif color == "blue":
+                blue_ml += ml_quantity
+            elif color == "dark":
+                dark_ml += ml_quantity
+
+        order['potion_type'] = [red_ml, green_ml, blue_ml, dark_ml]
+        order['quantity'] = quantity
+        bottle_plan.append(order)
+
     # Presumably, if we passed barrels, we should have enough ml to fulfill the strategy
-    return json.loads(json.dumps(strat.Strategy().retrieve_as_dict()))
+    return json.loads(json.dumps(bottle_plan))
 
 
 def type_to_sku(potion_type):
