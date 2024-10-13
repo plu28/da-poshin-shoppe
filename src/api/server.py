@@ -1,13 +1,15 @@
-from fastapi import FastAPI, exceptions
+from fastapi import FastAPI, exceptions, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from src.api import carts, catalog, bottler, barrels, admin, info, inventory
 import json
 import logging
 import sys
+import time
 from starlette.middleware.cors import CORSMiddleware
+from starlette.types import Message
 import sqlalchemy
-from src import database as db
+from src.utils import database as db
 
 description = """
 Central Coast Cauldrons is the premier ecommerce site for all your alchemical desires.
@@ -56,3 +58,26 @@ async def validation_exception_handler(request, exc):
 @app.get("/")
 async def root():
     return {"message": "Welcome to the Central Coast Cauldrons."}
+
+async def set_body(request: Request, body: bytes):
+    async def receive() -> Message:
+        return {'type': 'http.request', 'body': body}
+    request._receive = receive
+
+@app.middleware("http")
+async def log_requests_and_responses(request: Request, call_next):
+    print(f"Request: {request.method} {request.url}")
+
+    req_body = await request.body()
+    print(f"Request Body:\n{req_body.decode('utf-8')}")
+
+    await set_body(request, req_body)
+    response = await call_next(request)
+
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+
+    print(f"Process time: {process_time:.4f} seconds")
+
+    return response

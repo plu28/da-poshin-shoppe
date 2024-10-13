@@ -5,12 +5,12 @@ from src.api import auth
 import sqlalchemy
 import json
 import re
-from src import database as db
-from src import global_inventory as gi
-from src import catalog_table as ct
-from src import log
+from src.utils import database as db
+from src.tables import global_inventory as gi
+from src.tables import catalog_table as ct
+from src.utils import log
 from src import prices
-from src import strategy as strat
+from src.tables import strategy as strat
 
 router = APIRouter(
     prefix="/bottler",
@@ -71,8 +71,18 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
         dark_loss = dark_ml * potion.quantity
 
         global_inventory = gi.GlobalInventory().retrieve()
+
+        # Check that we aren't delivering more than what we can
+        try:
+            assert global_inventory.red_ml >= red_loss, "Delivering potions with more red_ml than available"
+            assert global_inventory.green_ml >= green_loss, "Delivering potions with more green_ml than available"
+            assert global_inventory.blue_ml >= blue_loss, "Delivering potions with more blue_ml than available"
+            assert global_inventory.dark_ml >= dark_loss, "Delivering potions with more dark_ml than available"
+        except AssertionError as e:
+            print(f"AssertionError: {e}")
+            return "ERROR"
+
         update_query = sqlalchemy.text("UPDATE global_inventory SET red_ml = :red_ml, green_ml = :green_ml, blue_ml = :blue_ml, dark_ml = :dark_ml")
-        print(f"{global_inventory.red_ml} - {red_loss}")
         with db.engine.begin() as connection:
             connection.execute(update_query,
                 {
@@ -92,28 +102,48 @@ def get_bottle_plan():
     """
     log.post_log('/bottler/plan')
 
+
+    global_inventory = gi.GlobalInventory().retrieve()
+    available_red = global_inventory.red_ml
+    available_green = global_inventory.green_ml
+    available_blue = global_inventory.blue_ml
+    available_dark = global_inventory.dark_ml
+
     bottle_plan = []
     mystrat = strat.Strategy().retrieve_as_dict()
     for sku, quantity in mystrat.items():
         red_ml = green_ml = blue_ml = dark_ml = 0
         order = {}
         # Since sku corresponds to potion makeup, I can use regex
-        for ml_quantity, color in re.findall("(\d+)([a-z]+)", sku):
+        for ml_quantity, color in re.findall(r"(\d+)([a-z]+)", sku):
             ml_quantity = int(ml_quantity) # typecasting to int
             if color == "red":
+                available_red -= ml_quantity
                 red_ml += ml_quantity
             elif color == "green":
+                available_green -= ml_quantity
                 green_ml += ml_quantity
             elif color == "blue":
+                available_blue -= ml_quantity
                 blue_ml += ml_quantity
             elif color == "dark":
+                available_dark -= ml_quantity
                 dark_ml += ml_quantity
+
+        # Check that we aren't bottling more than what's available
+        try:
+            assert available_red < 0, "Bottling more red_ml than available"
+            assert available_green < 0, "Bottling more green_ml than available"
+            assert available_blue < 0, "Bottling more blue_ml than available"
+            assert available_dark < 0, "Bottling more dark_ml than available"
+        except AssertionError as e:
+            print(f"AssertionError: {e}")
+            return []
 
         order['potion_type'] = [red_ml, green_ml, blue_ml, dark_ml]
         order['quantity'] = quantity
         bottle_plan.append(order)
 
-    # Presumably, if we passed barrels, we should have enough ml to fulfill the strategy
     return json.loads(json.dumps(bottle_plan))
 
 

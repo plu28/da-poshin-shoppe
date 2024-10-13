@@ -1,4 +1,4 @@
-from src import database as db
+from src.utils import database as db
 import sqlalchemy
 
 class Roxanne():
@@ -28,3 +28,7 @@ class Roxanne():
             self.quantity = row.quantity
             self.potion_type = row.potion_type
             return self
+
+    def wipe(self):
+        with db.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("DELETE FROM roxanne"))

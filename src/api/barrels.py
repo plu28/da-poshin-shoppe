@@ -4,12 +4,12 @@ from src.api import auth
 import sqlalchemy
 import json
 from json import dumps
-from src import database as db
-from src import global_inventory as gi
-from src import catalog_table as cat
-from src import roxanne as rox
-from src import log
-from src import strategy as strat
+from src.utils import database as db
+from src.tables import global_inventory as gi
+from src.tables import catalog_table as cat
+from src.tables import roxanne as rox
+from src.utils import log
+from src.tables import strategy as strat
 import re
 
 
@@ -30,7 +30,6 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
-    log.post_log(f'/barrels/deliver/{order_id}')
     global_inventory = gi.GlobalInventory().retrieve() # Get current inventory state
 
     barrel_cost = 0
@@ -53,8 +52,13 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     # Get new gold after purchasing barrels
     new_gold = global_inventory.gold - barrel_cost
 
+    try:
+        assert new_gold > 0, "Attempted to deliver barrels that I could not afford"
+    except AssertionError as e:
+        print(f"AssertionError: {e}")
+        return "ERROR"
+
     # Update global inventory
-    # TODO: Handle updates in global_inventory.py at some point
     update_query = sqlalchemy.text("UPDATE global_inventory SET gold = :gold, red_ml = :red_ml, green_ml = :green_ml, blue_ml = :blue_ml, dark_ml = :dark_ml")
     with db.engine.begin() as connection:
         connection.execute(update_query,
@@ -77,7 +81,10 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     log.post_log('/barrels/plan')
     global_inventory = gi.GlobalInventory().retrieve() # Getting current state of inventory
 
-    if (global_inventory.gold < 60):
+    try:
+        assert global_inventory.gold > 60, "Not enough gold to buy any barrels"
+    except AssertionError as e:
+        print(f"AssertionError: {e}")
         return []
 
     # TODO: UNCOMMENT AFTER LOGGING WHAT HER INVENTORY LOOKS LIKE
@@ -100,6 +107,13 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             )
 
     new_strat = strat.Strategy().retrieve_as_dict()
+    try:
+        assert new_strat != None, "Strategy is empty"
+    except AssertionError as e:
+        print(f"AssertionError: {e}")
+        return []
+
+
     while(sum(new_strat.values()) != 0):
         print(new_strat)
         barrels_im_buying = []
@@ -115,7 +129,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         # Get how many ml we need for the strategy
         for sku, quantity in new_strat.items():
             # Since sku corresponds to potion makeup, I can use regex
-            for ml_quantity, color in re.findall("(\d+)([a-z]+)", sku):
+            for ml_quantity, color in re.findall(r"(\d+)([a-z]+)", sku):
                 ml_quantity = int(ml_quantity) # typecasting to int
                 if color == "red":
                     red_need += ml_quantity * quantity
@@ -178,24 +192,36 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         # BAD Barrel fix: buy small barrels until ml need is for sure met
         if red_need > 0:
             small_red_barrel = rox.Roxanne().retrieve("SMALL_RED_BARREL")
-            if (small_red_barrel == None):
-                raise ValueError("RED SELECT statement retrieved no entries")
+            try:
+                assert small_red_barrel != None, "Roxanne selling no SMALL_RED_BARREL"
+            except AssertionError as e:
+                print(f"AssertionError: {e}")
+                return []
             quantity = (red_need // small_red_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
-            if (quantity > small_red_barrel.quantity):
+            try:
                 # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
-                raise ValueError("Not enough RED barrels being offered by roxanne")
+                assert quantity < small_red_barrel.quantity != None, "Roxanne not selling enough small SMALL_RED_BARREL"
+            except AssertionError as e:
+                print(f"AssertionError: {e}")
+                return []
             price += small_red_barrel.price * quantity
             red_need -= small_red_barrel.ml_per_barrel * quantity
             barrels_im_buying.append({'sku':small_red_barrel.sku, 'quantity': quantity})
 
         if blue_need > 0:
             small_blue_barrel = rox.Roxanne().retrieve("SMALL_BLUE_BARREL")
-            if (small_blue_barrel == None):
-                raise ValueError("BLUE SELECT statement retrieved no entries")
+            try:
+                assert small_blue_barrel != None, "Roxanne selling no SMALL_BLUE_BARREL"
+            except AssertionError as e:
+                print(f"AssertionError: {e}")
+                return []
             quantity = (blue_need // small_blue_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
-            if (quantity > small_blue_barrel.quantity):
+            try:
                 # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
-                raise ValueError("Not enough BLUE barrels being offered by roxanne")
+                assert quantity < small_blue_barrel.quantity != None, "Roxanne not selling enough small SMALL_BLUE_BARREL"
+            except AssertionError as e:
+                print(f"AssertionError: {e}")
+                return []
             price += small_blue_barrel.price * quantity
             blue_need -= small_blue_barrel.ml_per_barrel * quantity
             barrels_im_buying.append({'sku':small_blue_barrel.sku, 'quantity': quantity})
@@ -203,37 +229,35 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
         if green_need > 0:
             small_green_barrel = rox.Roxanne().retrieve("SMALL_GREEN_BARREL")
-            if (small_green_barrel == None):
-                raise ValueError("GREEN SELECT statement retrieved no entries")
+            try:
+                assert small_green_barrel != None, "Roxanne selling no SMALL_GREEN_BARREL"
+            except AssertionError as e:
+                print(f"AssertionError: {e}")
+                return []
             quantity = (green_need // small_green_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
-            if (quantity > small_green_barrel.quantity):
+            try:
                 # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
-                raise ValueError("Not enough GREEN barrels being offered by roxanne")
+                assert quantity < small_green_barrel.quantity != None, "Roxanne not selling enough small SMALL_GREEN_BARREL"
+            except AssertionError as e:
+                print(f"AssertionError: {e}")
+                return []
             price += small_green_barrel.price * quantity
             green_need -= small_green_barrel.ml_per_barrel * quantity
             barrels_im_buying.append({'sku':small_green_barrel.sku, 'quantity': quantity})
 
-        # There are no small dark barrels.
-
+        # There are no small dark barrels. Can only buy large ones.
         # At this point, the total amount of ml we're buying should have our total need be met
-        if (red_need > 0 or green_need > 0 or blue_need > 0 or dark_need > 0):
-            print(f"UNMET NEED: {red_need},{green_need},{blue_need},{dark_need}")
 
-        print(f"{barrels_im_buying}")
         # Check if we can even afford this
-        print(f"{price} <= {global_inventory.gold}")
         if (price <= global_inventory.gold):
-            # wahoo we can afford
-            print(f"we can afford {barrels_im_buying}")
-
             # update table with the strategy we ended up with
+            print(f"Successfully purchased barrels: {barrels_im_buying}")
             strat.Strategy().update(new_strat)
-
             return json.loads(json.dumps(barrels_im_buying))
         else:
-            print(f"we CANT afford {barrels_im_buying}")
             # decrement the potion with the largest quantity (preserving a diverse catalog)
             largest_key = max(new_strat, key = new_strat.get)
             new_strat[largest_key] -= 1
 
+    print("Could not afford any barrels this tick")
     return []

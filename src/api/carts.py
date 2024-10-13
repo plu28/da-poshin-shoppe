@@ -3,13 +3,13 @@ from pydantic import BaseModel
 from src.api import auth
 from enum import Enum
 import sqlalchemy
-from src import database as db
-from src import customers as customer_table
-from src import carts_table as ct
-from src import catalog_table as cat
-from src import global_inventory as gi
-from src import cart_potions as cp
-from src import log
+from src.utils import database as db
+from src.tables import customers as customer_table
+from src.tables import carts_table as ct
+from src.tables import catalog_table as cat
+from src.tables import global_inventory as gi
+from src.tables import cart_potions as cp
+from src.utils import log
 
 import random
 
@@ -150,6 +150,12 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     cart = ct.Carts().retrieve(cart_id)
     potion = cat.CatalogInventory().retrieve(item_sku)
 
+    try:
+        assert potion.quantity > cart_item.quantity, f"Can't add more than what's available to stock. {potion.qauntity} available, {cart_item.quantity} wanted"
+    except AssertionError as e:
+        print(f"AssertionError: {e}")
+        return "ERROR"
+
     # Add the proper ml to the cart
     cart.red_ml += potion.potion_type[0] * cart_item.quantity
     cart.green_ml += potion.potion_type[1] * cart_item.quantity
@@ -211,10 +217,13 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     # Before checking out, check if there is enough stock to fulfill the order
     for cart_row in cart_rows:
         available_stock = cat.CatalogInventory().retrieve(cart_row.sku).quantity
-        if available_stock < cart_row.quantity:
-            return "NOT ENOUGH STOCK"
-    # Passing this for loop means there is enough stock to fulfill the order
+        try:
+            assert available_stock > cart_row.quantity, f"Not enough stock of [{cart_row.sku}]. Purchasing {cart_row.quantity} when only {available_stock} is available"
+        except AssertionError as e:
+            print(f"AssertionError: {e}")
+            return {"total_potions_bought": 0, "total_gold_paid": 0}
 
+    # Passing this for loop means there is enough stock to fulfill the order
     potions_bought = 0
     for cart_row in cart_rows:
         potions_bought += cart_row.quantity

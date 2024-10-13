@@ -1,5 +1,5 @@
 from math import gcd
-from src import database as db
+from src.utils import database as db
 import sqlalchemy
 
 class Strategy():
@@ -33,3 +33,7 @@ class Strategy():
                         'sku': sku
                     }
                 )
+
+    def wipe(self):
+        with db.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("DELETE FROM strategy"))

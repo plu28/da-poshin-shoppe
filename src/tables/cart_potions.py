@@ -1,4 +1,4 @@
-from src import database as db
+from src.utils import database as db
 import sqlalchemy
 
 class CartPotions():
@@ -25,3 +25,7 @@ class CartPotions():
             self.sku = row.sku
             self.quantity = row.quantity
             return self
+
+    def wipe(self):
+        with db.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("DELETE FROM cart_potions"))

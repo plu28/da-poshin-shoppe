@@ -3,9 +3,9 @@ from pydantic import BaseModel
 from src.api import auth
 import math
 import sqlalchemy
-from src import database as db
-from src import global_inventory as gi
-from src import log
+from src.utils import database as db
+from src.tables import global_inventory as gi
+from src.utils import log
 
 router = APIRouter(
     prefix="/inventory",

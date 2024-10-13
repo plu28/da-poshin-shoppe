@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from src.api import auth
 import sqlalchemy
-from src import database as db
+import json
+from src.utils import database as db
+from src.utils import log
 router = APIRouter(
     prefix="/info",
     tags=["info"],
@@ -19,7 +21,6 @@ def post_time(timestamp: Timestamp):
     Share current time.
     """
     # LOGGING
-    with db.engine.begin() as connection:
-        log = connection.execute(sqlalchemy.text(f"INSERT INTO logs (endpoint) VALUES ('/current_time')"))
+    log.post_log("/current_time", request=json.dumps(timestamp.__dict__))
 
     return "OK"

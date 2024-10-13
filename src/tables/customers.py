@@ -1,4 +1,4 @@
-from src import database as db
+from src.utils import database as db
 import sqlalchemy
 
 class Customers():
@@ -26,3 +26,7 @@ class Customers():
             self.level = row.level
             self.visit_count = row.visit_count
             return self
+
+    def wipe(self):
+        with db.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("DELETE FROM catalog"))

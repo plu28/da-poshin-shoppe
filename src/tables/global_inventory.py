@@ -1,4 +1,4 @@
-from src import database as db
+from src.utils import database as db
 import sqlalchemy
 
 class GlobalInventory():
@@ -19,3 +19,7 @@ class GlobalInventory():
         self.blue_ml = row.blue_ml
         self.dark_ml = row.dark_ml
         return self
+
+    def wipe(self):
+        with db.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("DELETE FROM global_inventory"))

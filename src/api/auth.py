@@ -3,10 +3,10 @@ from fastapi.security.api_key import APIKeyHeader
 import os
 import dotenv
 import sqlalchemy
-from src import database as db
+from src.utils import database as db
 dotenv.load_dotenv()
 
-api_keys = []  
+api_keys = []
 
 api_keys.append(os.environ.get("API_KEY"))
 api_key_header = APIKeyHeader(name="access_token", auto_error=False)

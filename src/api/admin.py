@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from src.api import auth
 import sqlalchemy
-from src import database as db
-from src import log
+from src.utils import database as db
+from src.utils import log
 router = APIRouter(
     prefix="/admin",
     tags=["admin"],
@@ -21,8 +21,6 @@ def reset():
     # Resetting global inventory table
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text("UPDATE global_inventory SET red_ml = 0, green_ml = 0, blue_ml = 0, dark_ml = 0, gold = 100"))
-
-    # Resetting catalog
 
     # Emptying out some tables
     with db.engine.begin() as connection:

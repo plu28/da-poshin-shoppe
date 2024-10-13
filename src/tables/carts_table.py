@@ -1,6 +1,6 @@
 import sqlalchemy
-from src import database as db
-from . import prices
+from src.utils import database as db
+from src import prices
 
 class Carts():
     def __init__(self, cart_id=0, red_ml=0, green_ml=0, blue_ml=0, dark_ml=0, potion_quantity=0):
@@ -33,3 +33,7 @@ class Carts():
 
     def get_cart_value(self):
         return (self.red_ml * prices.RED_PRICE_PER_ML) + (self.green_ml * prices.GREEN_PRICE_PER_ML) + (self.blue_ml * prices.BLUE_PRICE_PER_ML) + (self.dark_ml * prices.DARK_PRICE_PER_ML)
+
+    def wipe(self):
+        with db.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("DELETE FROM carts"))
