@@ -1,7 +1,7 @@
 from fastapi import FastAPI, exceptions, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-from src.api import carts, catalog, bottler, barrels, admin, info, inventory
+from src.api import carts, catalog, bottler, barrels, admin, info, inventory, health
 import json
 import logging
 import sys
@@ -43,6 +43,7 @@ app.include_router(bottler.router)
 app.include_router(barrels.router)
 app.include_router(admin.router)
 app.include_router(info.router)
+app.include_router(health.router)
 
 @app.exception_handler(exceptions.RequestValidationError)
 @app.exception_handler(ValidationError)
@@ -57,7 +58,7 @@ async def validation_exception_handler(request, exc):
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the Central Coast Cauldrons."}
+    return {"message": "dis da poshin shoppe."}
 
 async def set_body(request: Request, body: bytes):
     async def receive() -> Message:
