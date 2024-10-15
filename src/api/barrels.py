@@ -53,7 +53,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     new_gold = global_inventory.gold - barrel_cost
 
     try:
-        assert new_gold > 0, "Attempted to deliver barrels that I could not afford"
+        assert new_gold >= 0, "Attempted to deliver barrels that I could not afford"
     except AssertionError as e:
         print(f"AssertionError: {e}")
         return "ERROR"

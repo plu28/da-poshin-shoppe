@@ -73,7 +73,6 @@ async def log_requests_and_responses(request: Request, call_next):
     print(f"Request Body:\n{req_body.decode('utf-8')}")
 
     await set_body(request, req_body)
-    response = await call_next(request)
 
     start_time = time.time()
     response = await call_next(request)
