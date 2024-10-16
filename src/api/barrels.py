@@ -206,7 +206,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 return []
             price += small_red_barrel.price * quantity
             red_need -= small_red_barrel.ml_per_barrel * quantity
-            barrels_im_buying.append({'sku':small_red_barrel.sku, 'quantity': quantity})
+            if not update_list_dictionary(barrels_im_buying, small_red_barrel.sku, quantity):
+                barrels_im_buying.append({'sku':small_red_barrel.sku, 'quantity': quantity})
 
         if blue_need > 0:
             small_blue_barrel = rox.Roxanne().retrieve("SMALL_BLUE_BARREL")
@@ -224,7 +225,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 return []
             price += small_blue_barrel.price * quantity
             blue_need -= small_blue_barrel.ml_per_barrel * quantity
-            barrels_im_buying.append({'sku':small_blue_barrel.sku, 'quantity': quantity})
+            if not update_list_dictionary(barrels_im_buying, small_blue_barrel.sku, quantity):
+                barrels_im_buying.append({'sku':small_blue_barrel.sku, 'quantity': quantity})
 
 
         if green_need > 0:
@@ -243,7 +245,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 return []
             price += small_green_barrel.price * quantity
             green_need -= small_green_barrel.ml_per_barrel * quantity
-            barrels_im_buying.append({'sku':small_green_barrel.sku, 'quantity': quantity})
+            if not update_list_dictionary(barrels_im_buying, small_green_barrel.sku, quantity):
+                barrels_im_buying.append({'sku':small_green_barrel.sku, 'quantity': quantity})
 
         # There are no small dark barrels. Can only buy large ones.
         # At this point, the total amount of ml we're buying should have our total need be met
@@ -261,3 +264,11 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     print("Could not afford any barrels this tick")
     return []
+
+# Updates a dictionary in a list of dictionaries with a new value
+def update_list_dictionary(list_dict, sku, add_val):
+    for dict in list_dict:
+        if sku in list(dict.values()):
+            dict['quantity'] += add_val
+            return True
+    return False

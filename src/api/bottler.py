@@ -112,6 +112,8 @@ def get_bottle_plan():
     bottle_plan = []
     mystrat = strat.Strategy().retrieve_as_dict()
     for sku, quantity in mystrat.items():
+        if quantity == 0:
+            continue
         red_ml = green_ml = blue_ml = dark_ml = 0
         order = {}
         # Since sku corresponds to potion makeup, I can use regex
@@ -132,10 +134,10 @@ def get_bottle_plan():
 
         # Check that we aren't bottling more than what's available
         try:
-            assert available_red < 0, "Bottling more red_ml than available"
-            assert available_green < 0, "Bottling more green_ml than available"
-            assert available_blue < 0, "Bottling more blue_ml than available"
-            assert available_dark < 0, "Bottling more dark_ml than available"
+            assert available_red >= 0, "Bottling more red_ml than available"
+            assert available_green >= 0, "Bottling more green_ml than available"
+            assert available_blue >= 0, "Bottling more blue_ml than available"
+            assert available_dark >= 0, "Bottling more dark_ml than available"
         except AssertionError as e:
             print(f"AssertionError: {e}")
             return []

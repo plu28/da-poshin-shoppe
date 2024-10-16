@@ -151,7 +151,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     potion = cat.CatalogInventory().retrieve(item_sku)
 
     try:
-        assert potion.quantity > cart_item.quantity, f"Can't add more than what's available to stock. {potion.qauntity} available, {cart_item.quantity} wanted"
+        assert potion.quantity >= cart_item.quantity, f"Can't add more than what's available to stock. {potion.quantity} available, {cart_item.quantity} wanted"
     except AssertionError as e:
         print(f"AssertionError: {e}")
         return "ERROR"
@@ -218,7 +218,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     for cart_row in cart_rows:
         available_stock = cat.CatalogInventory().retrieve(cart_row.sku).quantity
         try:
-            assert available_stock > cart_row.quantity, f"Not enough stock of [{cart_row.sku}]. Purchasing {cart_row.quantity} when only {available_stock} is available"
+            assert available_stock >= cart_row.quantity, f"Not enough stock of [{cart_row.sku}]. Purchasing {cart_row.quantity} when only {available_stock} is available"
         except AssertionError as e:
             print(f"AssertionError: {e}")
             return {"total_potions_bought": 0, "total_gold_paid": 0}
