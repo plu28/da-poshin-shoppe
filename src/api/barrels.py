@@ -89,8 +89,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     # TODO: UNCOMMENT AFTER LOGGING WHAT HER INVENTORY LOOKS LIKE
     # Drop what roxanne sold in the last barrels call
-    # with db.engine.begin() as connection:
-    #     connection.execute(sqlalchemy.text("DELETE FROM roxanne"))
+    with db.engine.begin() as connection:
+        connection.execute(sqlalchemy.text("DELETE FROM roxanne"))
 
     # Log everything roxanne is selling
     log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
