@@ -30,16 +30,16 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
-    global_inventory = gi.GlobalInventory().retrieve() # Get current inventory state
 
+    # Get how much im paying and how much im buying from these barrels
     barrel_cost = 0
-    red = global_inventory.red_ml
-    green = global_inventory.green_ml
-    blue = global_inventory.blue_ml
-    dark = global_inventory.dark_ml
+    red = 0
+    green = 0
+    blue = 0
+    dark = 0
 
     for barrel in barrels_delivered:
-        barrel_cost += (barrel.price * barrel.quantity)
+        barrel_cost -= (barrel.price * barrel.quantity)
         if barrel.potion_type == [1,0,0,0]:
             red += (barrel.ml_per_barrel * barrel.quantity)
         elif barrel.potion_type == [0,1,0,0]:
@@ -49,25 +49,49 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
         elif barrel.potion_type == [0,0,0,1]:
             dark += (barrel.ml_per_barrel * barrel.quantity)
 
-    # Get new gold after purchasing barrels
-    new_gold = global_inventory.gold - barrel_cost
-
-    try:
-        assert new_gold >= 0, "Attempted to deliver barrels that I could not afford"
-    except AssertionError as e:
-        print(f"AssertionError: {e}")
-        return "ERROR"
-
-    # Update global inventory
-    update_query = sqlalchemy.text("UPDATE global_inventory SET gold = :gold, red_ml = :red_ml, green_ml = :green_ml, blue_ml = :blue_ml, dark_ml = :dark_ml")
+    # SQL statement:
+        # Retrieves current gold (necessary for the later WHERE EXISTS clause to check if I can afford this barrel delivery)
+        # Inserts into the global inventory ledger IF the following conditions are true:
+            # I can afford this (WHERE EXISTS)
+            # This order_id hasn't come in before (AND NOT EXISTS)
+    insert_query = sqlalchemy.text('''
+        WITH current_inv AS (
+            SELECT
+                SUM(global_inventory.gold) AS my_gold
+            FROM
+                global_inventory
+        )
+        INSERT INTO
+            global_inventory (gold, red_ml, green_ml, blue_ml, dark_ml, order_id)
+        SELECT
+            :barrel_cost, :red_ml, :green_ml, :blue_ml, :dark_ml, :order_id
+        WHERE EXISTS (
+            SELECT
+                my_gold
+            FROM
+                current_inv
+            WHERE
+                my_gold > -(:barrel_cost)
+            )
+        AND NOT EXISTS (
+            SELECT
+                global_inventory.order_id
+            FROM
+                global_inventory
+            WHERE
+                global_inventory.order_id = :order_id
+        )
+        '''
+    )
     with db.engine.begin() as connection:
-        connection.execute(update_query,
+        connection.execute(insert_query,
             {
-                'gold': new_gold,
+                'barrel_cost': barrel_cost,
                 'red_ml': red,
                 'green_ml': green,
                 'blue_ml': blue,
-                'dark_ml': dark
+                'dark_ml': dark,
+                'order_id': order_id
             }
         )
 
