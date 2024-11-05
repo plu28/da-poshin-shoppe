@@ -13,23 +13,55 @@ router = APIRouter(
     dependencies=[Depends(auth.get_api_key)],
 )
 
+# Retrieving gold
 @router.get("/audit")
 def get_inventory():
     """ """
     log.post_log('/inventory/audit')
 
+    get_gold = sqlalchemy.text('''
+        WITH current_gold AS (
+            SELECT
+                SUM(gold_change) AS gold
+            FROM gold_ledger
+        ),
+        current_ml AS (
+            SELECT
+                SUM(red) AS current_red,
+                SUM(green) AS current_green,
+                SUM(blue) AS current_blue,
+                SUM(dark) AS current_dark
+            FROM ml_ledger
+        ),
+        current_poshins AS (
+            SELECT
+                SUM(quantity) AS total_current_poshins
+            FROM poshin_ledger
+        )
+        SELECT
+            (SELECT gold FROM current_gold) AS gold,
+            (SELECT current_red FROM current_ml) AS red,
+            (SELECT current_green FROM current_ml) AS green,
+            (SELECT current_blue FROM current_ml) AS blue,
+            (SELECT current_dark FROM current_ml) AS dark,
+            (SELECT total_current_poshins FROM current_poshins) AS poshins
+    ''')
+
     # Counts up all the potion stock in the catalog
-    with db.engine.begin() as connection:
-        quantities = connection.execute(sqlalchemy.text(f"SELECT quantity FROM catalog"))
-    quantity_rows = quantities.fetchall()
-    potion_stock = 0
-    for quantity_row in quantity_rows:
-        potion_stock += quantity_row.quantity
+    try:
+        with db.engine.begin() as connection:
+            audit = connection.execute(get_gold).fetchone()
+            if audit == None:
+                raise Exception("Audit returned no rows")
+    except Exception as e:
+        print(e)
+        return {"error": e}
 
-    global_inventory = gi.GlobalInventory().retrieve()
-    ml_in_barrels = global_inventory.red_ml + global_inventory.green_ml + global_inventory.blue_ml + global_inventory.dark_ml # Counts up all the ml
-
-    return {"number_of_potions": potion_stock, "ml_in_barrels": ml_in_barrels, "gold": global_inventory.gold}
+    return {
+        "number_of_potions": audit.poshins,
+        "ml_in_barrels": audit.red + audit.green + audit.blue + audit.dark,
+        "gold": audit.gold
+    }
 
 # Gets called once a day
 @router.post("/plan")
