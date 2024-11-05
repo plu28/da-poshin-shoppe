@@ -54,20 +54,19 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
         # Inserts into the global inventory ledger IF the following conditions are true:
             # I can afford this (WHERE EXISTS)
             # This order_id hasn't come in before (AND NOT EXISTS)
-    insert_query = sqlalchemy.text('''
+    cte = '''
         WITH current_inv AS (
             SELECT
-                SUM(global_inventory.gold) AS my_gold
+                SUM(gold_ledger.gold_change) AS gold
             FROM
-                global_inventory
+                gold_ledger
         )
-        INSERT INTO
-            global_inventory (gold, red_ml, green_ml, blue_ml, dark_ml, order_id)
-        SELECT
-            :barrel_cost, :red_ml, :green_ml, :blue_ml, :dark_ml, :order_id
+    '''
+
+    condition = '''
         WHERE EXISTS (
             SELECT
-                my_gold
+                gold
             FROM
                 current_inv
             WHERE
@@ -75,25 +74,55 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             )
         AND NOT EXISTS (
             SELECT
-                global_inventory.order_id
+                transaction_id
             FROM
-                global_inventory
+                gold_ledger
             WHERE
-                global_inventory.order_id = :order_id
+                transaction_id = :order_id
         )
+    '''
+
+    insert_gold_ledger_query = sqlalchemy.text(f'''
+        {cte}
+        INSERT INTO
+            gold_ledger (gold_change, transaction_id)
+        SELECT
+            :barrel_cost,
+            :order_id
+        {condition}
+    ''')
+
+    insert_ml_ledger_query = sqlalchemy.text(f'''
+        {cte}
+        INSERT INTO
+            ml_ledger (red, green, blue, dark, transaction_id)
+        SELECT
+            :barrel_cost, :red_ml, :green_ml, :blue_ml, :dark_ml, :order_id
+        {condition}
         '''
     )
     with db.engine.begin() as connection:
-        connection.execute(insert_query,
-            {
-                'barrel_cost': barrel_cost,
-                'red_ml': red,
-                'green_ml': green,
-                'blue_ml': blue,
-                'dark_ml': dark,
-                'order_id': order_id
-            }
-        )
+        try:
+            insert_ml = connection.execute(insert_ml_ledger_query,
+                {
+                    'red_ml': red,
+                    'green_ml': green,
+                    'blue_ml': blue,
+                    'dark_ml': dark,
+                    'order_id': order_id
+                }
+            )
+
+            insert_gold = connection.execute(insert_gold_ledger_query,
+                {
+                    'barrel_cost': barrel_cost,
+                    'order_id': order_id
+                }
+            )
+
+        except Exception as e:
+            print(e)
+            return {"error": e}
 
     return "OK"
 
@@ -103,8 +132,11 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
     # Log endpoint
     log.post_log('/barrels/plan')
+
+    # Unnecessary transaction
     global_inventory = gi.GlobalInventory().retrieve() # Getting current state of inventory
 
+    # This check can be in the sql statement
     try:
         assert global_inventory.gold > 60, "Not enough gold to buy any barrels"
     except AssertionError as e:
@@ -116,6 +148,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text("DELETE FROM roxanne"))
 
+    # Don't need to log everything roxanne is selling into a seperate table.
     # Log everything roxanne is selling
     log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
     with db.engine.begin() as connection:
