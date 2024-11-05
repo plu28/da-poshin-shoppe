@@ -70,7 +70,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             FROM
                 current_inv
             WHERE
-                my_gold > -(:barrel_cost)
+                gold > -(:barrel_cost)
             )
         AND NOT EXISTS (
             SELECT
@@ -97,7 +97,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
         INSERT INTO
             ml_ledger (red, green, blue, dark, transaction_id)
         SELECT
-            :barrel_cost, :red_ml, :green_ml, :blue_ml, :dark_ml, :order_id
+            :red_ml, :green_ml, :blue_ml, :dark_ml, :order_id
         {condition}
         '''
     )
@@ -109,9 +109,12 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                     'green_ml': green,
                     'blue_ml': blue,
                     'dark_ml': dark,
-                    'order_id': order_id
+                    'order_id': order_id,
+                    'barrel_cost': barrel_cost
                 }
             )
+            if insert_ml.rowcount == 0:
+                raise Exception("insert_ml affected 0 rows")
 
             insert_gold = connection.execute(insert_gold_ledger_query,
                 {
@@ -119,6 +122,8 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
                     'order_id': order_id
                 }
             )
+            if insert_gold.rowcount == 0:
+                raise Exception("insert_gold affected 0 rows")
 
         except Exception as e:
             print(e)
