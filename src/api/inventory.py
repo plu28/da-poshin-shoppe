@@ -19,38 +19,20 @@ def get_inventory():
     """ """
     log.post_log('/inventory/audit')
 
-    get_gold = sqlalchemy.text('''
-        WITH current_gold AS (
-            SELECT
-                SUM(gold_change) AS gold
-            FROM gold_ledger
-        ),
-        current_ml AS (
-            SELECT
-                SUM(red) AS current_red,
-                SUM(green) AS current_green,
-                SUM(blue) AS current_blue,
-                SUM(dark) AS current_dark
-            FROM ml_ledger
-        ),
-        current_poshins AS (
-            SELECT
-                SUM(quantity) AS total_current_poshins
-            FROM poshin_ledger
-        )
+    get_audit = sqlalchemy.text('''
         SELECT
-            (SELECT gold FROM current_gold) AS gold,
-            (SELECT current_red FROM current_ml) AS red,
-            (SELECT current_green FROM current_ml) AS green,
-            (SELECT current_blue FROM current_ml) AS blue,
-            (SELECT current_dark FROM current_ml) AS dark,
-            (SELECT total_current_poshins FROM current_poshins) AS poshins
+            (SELECT gold FROM view_gold) AS gold,
+            (SELECT red FROM view_ml) AS red,
+            (SELECT green FROM view_ml) AS green,
+            (SELECT blue FROM view_ml) AS blue,
+            (SELECT dark FROM view_ml) AS dark,
+            (SELECT COALESCE(SUM(quantity)) FROM view_catalog) AS total_poshins
     ''')
 
     # Counts up all the potion stock in the catalog
     try:
         with db.engine.begin() as connection:
-            audit = connection.execute(get_gold).fetchone()
+            audit = connection.execute(get_audit).fetchone()
             if audit == None:
                 raise Exception("Audit returned no rows")
     except Exception as e:
@@ -58,7 +40,7 @@ def get_inventory():
         return {"error": e}
 
     return {
-        "number_of_potions": audit.poshins,
+        "number_of_potions": audit.total_poshins,
         "ml_in_barrels": audit.red + audit.green + audit.blue + audit.dark,
         "gold": audit.gold
     }
