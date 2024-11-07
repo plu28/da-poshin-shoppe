@@ -123,19 +123,14 @@ def create_cart(new_cart: Customer):
     """ """
     log.post_log('/carts/create_cart')
 
-    cart_id = random.randint(100000000, 999999999) # Generates a random id, ~ 1 billion possible id's
-
-    # Check to make sure there is no cart_id collision
-    carts_table = ct.Carts().retrieve(cart_id)
-    while (carts_table != None):
-        cart_id = random.randint(100000000, 999999999) # Generates a new id if a collision was found and checks again to make sure it doesn't exist
-        carts_table = ct.Carts().retrieve(cart_id)
-
-    insert_query = sqlalchemy.text("INSERT INTO carts (cart_id, red_ml, green_ml, blue_ml, dark_ml, potion_quantity) VALUES (:cart_id, 0, 0, 0, 0, 0)")
+    insert_query = sqlalchemy.text('''
+        INSERT INTO carts DEFAULT VALUES
+        RETURNING carts.id
+    ''')
     with db.engine.begin() as connection:
-        connection.execute(insert_query, {'cart_id': cart_id})
+        cart_insert = connection.execute(insert_query).fetchone()
 
-    return {"cart_id": cart_id}
+    return {"cart_id": cart_insert.id}
 
 
 class CartItem(BaseModel):
