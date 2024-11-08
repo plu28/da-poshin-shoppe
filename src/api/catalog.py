@@ -1,11 +1,8 @@
 from fastapi import APIRouter
 import sqlalchemy
 from src.utils import database as db
-from src.utils import log
-from src.utils import jsonify
-import re
+from src.utils import log, jsonify, skutils
 import json
-from src import prices
 
 
 router = APIRouter()
@@ -40,36 +37,8 @@ def get_catalog():
     rows = []
     for row in catalog_result.mappings():
         row = dict(row)
-        row['price'] = get_price(row['sku'])
-        row['potion_type'] = get_type(row['sku'])
+        row['price'] = skutils.get_price(row['sku'])
+        row['potion_type'] = skutils.get_type(row['sku'])
         rows.append(row)
 
     return json.loads(json.dumps(rows, default=str))
-
-def get_price(sku: str):
-    price = 0
-    for ml_quantity, color in re.findall(r"(\d+)([a-z]+)", sku):
-        ml_quantity = int(ml_quantity) # typecasting to int
-        if color == "red":
-            price += ml_quantity * prices.RED_PRICE_PER_ML
-        elif color == "green":
-            price += ml_quantity * prices.GREEN_PRICE_PER_ML
-        elif color == "blue":
-            price += ml_quantity * prices.BLUE_PRICE_PER_ML
-        elif color == "dark":
-            price += ml_quantity * prices.DARK_PRICE_PER_ML
-    return price
-
-def get_type(sku: str):
-    type = [0,0,0,0]
-    for ml_quantity, color in re.findall(r"(\d+)([a-z]+)", sku):
-        ml_quantity = int(ml_quantity) # typecasting to int
-        if color == "red":
-            type[0] = ml_quantity
-        elif color == "green":
-            type[1] = ml_quantity
-        elif color == "blue":
-            type[2] = ml_quantity
-        elif color == "dark":
-            type[3] = ml_quantity
-    return type
