@@ -56,10 +56,10 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
             FROM ml_ledger
             WHERE transaction_id = :order_id
         )
-        AND (SELECT red FROM current_ml_inventory) >= :red
-        AND (SELECT green FROM current_ml_inventory) >= :green
-        AND (SELECT blue FROM current_ml_inventory) >= :blue
-        AND (SELECT dark FROM current_ml_inventory) >= :dark
+        AND (SELECT red FROM view_ml) >= :red
+        AND (SELECT green FROM view_ml) >= :green
+        AND (SELECT blue FROM view_ml) >= :blue
+        AND (SELECT dark FROM view_ml) >= :dark
     ''')
 
     insert_poshin_query = sqlalchemy.text(f'''
@@ -115,7 +115,7 @@ def get_bottle_plan():
         with db.engine.begin() as connection:
             # looking at current inventory
             current_ml_inventory_query = sqlalchemy.text('''
-                SELECT * FROM current_ml_inventory
+                SELECT * FROM view_ml
             ''')
             ml_inventory = connection.execute(current_ml_inventory_query).fetchone()
             if ml_inventory == None:
