@@ -94,7 +94,8 @@ def search_orders(
             cart_potions.sku AS sku,
             cart_potions.quantity AS quantity,
             carts.customer_name AS customer_name,
-            completed_carts.created_at AS timestamp
+            completed_carts.created_at AS timestamp,
+            completed_carts.line_item_total AS line_item_total
         FROM
             carts
         JOIN
@@ -123,7 +124,6 @@ def search_orders(
         search_result['timestamp'] = search_result['timestamp'].isoformat()
 
         search_result['line_item_id'] = i
-        search_result['line_item_total'] = skutils.get_price(search_result['sku']) * search_result['quantity']
 
         # Remove these key value pairs to fit api spec
         del search_result['quantity']
@@ -268,8 +268,8 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     ''')
 
     completed_carts_query = sqlalchemy.text('''
-        INSERT INTO completed_carts
-        SELECT :cart_id
+        INSERT INTO completed_carts (id, line_item_total)
+        SELECT :cart_id, :line_item_total
     ''')
 
     try:
@@ -291,7 +291,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             })
 
             update_poshin_ledger = connection.execute(poshin_ledger_query, {'cart_id': cart_id})
-            update_completed_carts = connection.execute(completed_carts_query, {'cart_id': cart_id})
+            update_completed_carts = connection.execute(completed_carts_query, {'cart_id': cart_id, 'line_item_total': price})
     except Exception as e:
         print(e)
         return "ERROR"
