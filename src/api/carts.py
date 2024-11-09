@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
+# from sqlalchemy.sql.sqltypes import TIMESTAMP
 from src.api import auth
 from enum import Enum
 import sqlalchemy
+# from sqlalchemy.orm import declarative_base, sessionmaker
+# from sqlalchemy import Column, Integer, Text, ForeignKey, TIMESTAMP
 from src.utils import database as db
 from src.tables import customers as customer_table
 from src.tables import carts_table as ct
@@ -10,6 +13,8 @@ from src.tables import catalog_table as cat
 from src.tables import global_inventory as gi
 from src.tables import cart_potions as cp
 from src.utils import log, skutils
+# from datetime import datetime
+import json
 
 import random
 
@@ -28,6 +33,28 @@ class search_sort_options(str, Enum):
 class search_sort_order(str, Enum):
     asc = "asc"
     desc = "desc"
+
+# Base = declarative_base()
+# class carts(Base):
+#     __tablename__ = 'carts'
+#     id = Column(Integer, primary_key=True)
+#     customer_name = Column(Text, nullable=True)
+#     character_class = Column(Text, nullable=True)
+#     level = Column(Integer, nullable=True)
+
+# class cart_potions(Base):
+#     __tablename__ = 'cart_potions'
+#     id = Column(Integer, primary_key=True)
+#     cart_id = Column(Integer, ForeignKey('carts.id'))
+#     sku = Column(Text)
+#     quantity = Column(Integer, nullable=True)
+
+# class completed_carts(Base):
+#     __tablename__ = 'completed_carts'
+#     id = Column(Integer, ForeignKey('carts.id'), primary_key=True)
+#     created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow)
+
+# Base.metadata.create_all(db.engine)
 
 @router.get("/search/", tags=["search"])
 def search_orders(
@@ -61,25 +88,52 @@ def search_orders(
     Your results must be paginated, the max results you can return at any
     time is 5 total line items.
     """
-    stmt = (
-        sqlalchemy.select(
 
+    search_query = sqlalchemy.text(f'''
+        SELECT
+            cart_potions.sku AS sku,
+            cart_potions.quantity AS quantity,
+            carts.customer_name AS customer_name,
+            completed_carts.created_at AS timestamp
+        FROM
+            carts
+        JOIN
+            cart_potions ON carts.id = cart_potions.cart_id
+        JOIN
+            completed_carts ON carts.id = completed_carts.id
+        WHERE
+            customer_name ILIKE :customer_name
+            AND sku ILIKE :potion_sku
+        ORDER BY {sort_col.value} {sort_order.value}
+    ''')
+    try:
+        with db.engine.begin() as connection:
+            search_result_mappings = connection.execute(search_query, {
+                'customer_name': '%' + customer_name + '%',
+                'potion_sku': '%' + potion_sku + '%',
+            }).mappings()
+    except Exception as e:
+        print(e)
+        return {'error': e}
 
-        )
-    )
+    results = []
+    for i, search_result in enumerate(search_result_mappings):
+        search_result = dict(search_result)
+        search_result['item_sku'] = f"{search_result['quantity']} {search_result['sku']}"
+        search_result['timestamp'] = search_result['timestamp'].isoformat()
+
+        search_result['line_item_id'] = i
+        search_result['line_item_total'] = skutils.get_price(search_result['sku']) * search_result['quantity']
+
+        # Remove these key value pairs to fit api spec
+        del search_result['quantity']
+        del search_result['sku']
+        results.append(search_result)
 
     return {
         "previous": "",
         "next": "",
-        "results": [
-            {
-                "line_item_id": 1,
-                "item_sku": "1 oblivion potion",
-                "customer_name": "Scaramouche",
-                "line_item_total": 50,
-                "timestamp": "2021-01-01T00:00:00Z",
-            }
-        ],
+        "results": json.loads(json.dumps(results))
     }
 
 
