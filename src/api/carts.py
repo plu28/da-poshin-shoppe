@@ -61,6 +61,12 @@ def search_orders(
     Your results must be paginated, the max results you can return at any
     time is 5 total line items.
     """
+    stmt = (
+        sqlalchemy.select(
+
+
+        )
+    )
 
     return {
         "previous": "",
@@ -124,11 +130,16 @@ def create_cart(new_cart: Customer):
     log.post_log('/carts/create_cart')
 
     insert_query = sqlalchemy.text('''
-        INSERT INTO carts DEFAULT VALUES
+        INSERT INTO carts (customer_name, character_class, level)
+        SELECT :customer_name, :character_class, :level
         RETURNING carts.id
     ''')
     with db.engine.begin() as connection:
-        cart_insert = connection.execute(insert_query).fetchone()
+        cart_insert = connection.execute(insert_query, {
+            'customer_name': new_cart.customer_name,
+            'character_class': new_cart.character_class,
+            'level': new_cart.level
+        }).fetchone()
 
     return {"cart_id": cart_insert.id}
 
@@ -202,6 +213,11 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         WHERE cart_potions.cart_id = :cart_id
     ''')
 
+    completed_carts_query = sqlalchemy.text('''
+        INSERT INTO completed_carts
+        SELECT :cart_id
+    ''')
+
     try:
         with db.engine.begin() as connection:
             cart_rows = connection.execute(cart_query, {'cart_id': cart_id}).fetchall()
@@ -221,6 +237,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             })
 
             update_poshin_ledger = connection.execute(poshin_ledger_query, {'cart_id': cart_id})
+            update_completed_carts = connection.execute(completed_carts_query, {'cart_id': cart_id})
     except Exception as e:
         print(e)
         return "ERROR"
