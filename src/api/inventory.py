@@ -29,7 +29,6 @@ def get_inventory():
             (SELECT COALESCE(SUM(quantity)) FROM view_catalog) AS total_poshins
     ''')
 
-    # Counts up all the potion stock in the catalog
     try:
         with db.engine.begin() as connection:
             audit = connection.execute(get_audit).fetchone()
