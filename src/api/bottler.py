@@ -31,22 +31,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
         return "OK"
 
     # Retrieves current ml in strategy
-    mystrat = strat.Strategy().retrieve_as_dict()
-    red_ml = green_ml = blue_ml = dark_ml = 0
-    for sku, quantity in mystrat.items():
-        if quantity == 0:
-            continue
-        # Since sku corresponds to potion makeup, I can use regex
-        for ml_quantity, color in re.findall(r"(\d+)([a-z]+)", sku):
-            ml_quantity = int(ml_quantity) # typecasting to int
-            if color == "red":
-                red_ml += ml_quantity
-            elif color == "green":
-                green_ml += ml_quantity
-            elif color == "blue":
-                blue_ml += ml_quantity
-            elif color == "dark":
-                dark_ml += ml_quantity
+    need = strat.Strategy().retrieve_as_need()
 
     insert_ml_query = sqlalchemy.text(f'''
         INSERT INTO ml_ledger (red, green, blue, dark, transaction_id)
@@ -77,10 +62,10 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     try:
         with db.engine.begin() as connection:
             insert_ml = connection.execute(insert_ml_query, {
-                'red': red_ml,
-                'green': green_ml,
-                'blue': blue_ml,
-                'dark': dark_ml,
+                'red': need['red'],
+                'green': need['green'],
+                'blue': need['blue'],
+                'dark': need['dark'],
                 'order_id': order_id
             })
             if insert_ml.rowcount == 0:
@@ -88,10 +73,10 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
             print(insert_ml.rowcount)
 
             insert_poshin = connection.execute(insert_poshin_query, {
-                'red': red_ml,
-                'green': green_ml,
-                'blue': blue_ml,
-                'dark': dark_ml,
+                'red': need['red'],
+                'green': need['green'],
+                'blue': need['blue'],
+                'dark': need['dark'],
                 'order_id': order_id
             })
             if insert_poshin.rowcount == 0:
