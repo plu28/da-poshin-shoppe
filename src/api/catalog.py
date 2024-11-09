@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 import sqlalchemy
 from src.utils import database as db
-from src.utils import log
-from src.utils import jsonify
+from src.utils import log, jsonify, skutils
+import json
+
 
 router = APIRouter()
 
@@ -15,15 +16,29 @@ def get_catalog():
     # LOGGING
     log.post_log("/catalog")
 
-    with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM catalog WHERE quantity > 0"))
-    row_list = result.fetchall()
-    if (row_list == []):
+    # Select my top 6 largest quantity potions
+    retrieve_catalog_query = sqlalchemy.text('''
+        SELECT
+            sku,
+            sku AS name,
+            CAST(SUM(quantity) AS INTEGER) AS quantity
+        FROM poshin_ledger
+        GROUP BY sku
+        HAVING SUM(quantity) > 0
+        LIMIT 6
+    ''')
+    try:
+        with db.engine.begin() as connection:
+            catalog_result = connection.execute(retrieve_catalog_query)
+    except Exception as e:
+        print(e)
         return []
 
-    # Currently just selects the top 6 rows.
-    # Future: implement better logic for selecting what potions need to be sold
-    if len(row_list) < 6:
-        return jsonify.rows_to_json(row_list)
-    else:
-        return jsonify.rows_to_json(row_list[0:6])
+    rows = []
+    for row in catalog_result.mappings():
+        row = dict(row)
+        row['price'] = skutils.get_price(row['sku'])
+        row['potion_type'] = skutils.get_type(row['sku'])
+        rows.append(row)
+
+    return json.loads(json.dumps(rows, default=str))

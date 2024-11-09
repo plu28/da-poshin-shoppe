@@ -9,7 +9,7 @@ from src.tables import carts_table as ct
 from src.tables import catalog_table as cat
 from src.tables import global_inventory as gi
 from src.tables import cart_potions as cp
-from src.utils import log
+from src.utils import log, skutils
 
 import random
 
@@ -123,19 +123,14 @@ def create_cart(new_cart: Customer):
     """ """
     log.post_log('/carts/create_cart')
 
-    cart_id = random.randint(100000000, 999999999) # Generates a random id, ~ 1 billion possible id's
-
-    # Check to make sure there is no cart_id collision
-    carts_table = ct.Carts().retrieve(cart_id)
-    while (carts_table != None):
-        cart_id = random.randint(100000000, 999999999) # Generates a new id if a collision was found and checks again to make sure it doesn't exist
-        carts_table = ct.Carts().retrieve(cart_id)
-
-    insert_query = sqlalchemy.text("INSERT INTO carts (cart_id, red_ml, green_ml, blue_ml, dark_ml, potion_quantity) VALUES (:cart_id, 0, 0, 0, 0, 0)")
+    insert_query = sqlalchemy.text('''
+        INSERT INTO carts DEFAULT VALUES
+        RETURNING carts.id
+    ''')
     with db.engine.begin() as connection:
-        connection.execute(insert_query, {'cart_id': cart_id})
+        cart_insert = connection.execute(insert_query).fetchone()
 
-    return {"cart_id": cart_id}
+    return {"cart_id": cart_insert.id}
 
 
 class CartItem(BaseModel):
@@ -147,51 +142,25 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
     log.post_log(f"/carts/{cart_id}/items/{item_sku}")
 
-    cart = ct.Carts().retrieve(cart_id)
-    potion = cat.CatalogInventory().retrieve(item_sku)
-
     try:
-        assert potion.quantity >= cart_item.quantity, f"Can't add more than what's available to stock. {potion.quantity} available, {cart_item.quantity} wanted"
-    except AssertionError as e:
-        print(f"AssertionError: {e}")
+        with db.engine.begin() as connection:
+            potion = connection.execute(sqlalchemy.text("SELECT quantity FROM view_catalog WHERE sku = :sku"), {'sku': item_sku}).fetchone()
+            # cart = connection.execute(sqlalchemy.text("SELECT * FROM carts WHERE id = :cart_id")).fetchone()
+        assert potion.quantity >= cart_item.quantity, f"Can't add more than what's available in stock. {potion.quantity} available, {cart_item.quantity} wanted"
+    except Exception as e:
+        print(e)
         return "ERROR"
 
-    # Add the proper ml to the cart
-    cart.red_ml += potion.potion_type[0] * cart_item.quantity
-    cart.green_ml += potion.potion_type[1] * cart_item.quantity
-    cart.blue_ml += potion.potion_type[2] * cart_item.quantity
-    cart.dark_ml += potion.potion_type[3] * cart_item.quantity
-
-    # Update carts table
-    update_query_carts = sqlalchemy.text("UPDATE carts SET red_ml = :red_ml, green_ml = :green_ml, blue_ml = :blue_ml, dark_ml = :dark_ml, potion_quantity = :potion_quantity WHERE cart_id = :cart_id")
+    insert_cart_potions_query = sqlalchemy.text('''
+        INSERT INTO cart_potions (cart_id, sku, quantity)
+        SELECT :cart_id, :item_sku, :quantity
+    ''')
     with db.engine.begin() as connection:
-        connection.execute(update_query_carts,
-            {
-                'red_ml': cart.red_ml,
-                'green_ml': cart.green_ml,
-                'blue_ml': cart.blue_ml,
-                'dark_ml': cart.dark_ml,
-                'potion_quantity': cart.potion_quantity + cart_item.quantity,
-                'cart_id': cart_id
-            })
-
-    # Update cart_potions table
-    cart_potions_row = cp.CartPotions().retrieve(cart_id, item_sku)
-    if (cart_potions_row == None):
-        # Insert a new row
-        insert_query = sqlalchemy.text("INSERT INTO cart_potions (cart_id, sku, quantity) VALUES (:cart_id, :sku, :quantity)")
-        with db.engine.begin() as connection:
-            connection.execute(insert_query,
-                {
-                    'cart_id': cart_id,
-                    'sku': item_sku,
-                    'quantity': cart_item.quantity
-                })
-    else:
-        # Update existing row quantity
-        update_query_cart_potions = sqlalchemy.text("UPDATE cart_potions SET quantity = :quantity")
-        with db.engine.begin() as connection:
-            connection.execute(update_query_cart_potions, {'quantity': cart_potions_row.quantity + cart_item.quantity})
+        connection.execute(insert_cart_potions_query, {
+            'cart_id': cart_id,
+            'item_sku': item_sku,
+            'quantity': cart_item.quantity
+        })
 
     return "OK"
 
@@ -204,44 +173,56 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     log.post_log(f"/carts/{cart_id}/checkout")
 
-    cart = ct.Carts().retrieve(cart_id)
-    total = cart.get_cart_value()
+    cart_query = sqlalchemy.text('''
+        WITH cart AS (
+            SELECT sku, quantity
+            FROM cart_potions
+            WHERE cart_id = :cart_id
+            GROUP BY sku, quantity
+        )
+        SELECT * FROM cart
+        -- Ensuring that we are not checking out more potions than we have in stock
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM cart
+            JOIN view_catalog ON cart.sku = view_catalog.sku
+            WHERE view_catalog.quantity < cart.quantity
+        )
+    ''')
 
-    global_inventory = gi.GlobalInventory().retrieve()
+    gold_ledger_query = sqlalchemy.text('''
+        INSERT INTO gold_ledger (gold_change, transaction_id)
+        SELECT :price, :cart_id
+    ''')
 
-    # Grabbing all this carts rows in cart_potions table
-    select_query = sqlalchemy.text ("SELECT * FROM cart_potions WHERE cart_id = :cart_id")
-    with db.engine.begin() as connection:
-        cart_rows = connection.execute(select_query, { 'cart_id': cart_id }).fetchall()
+    poshin_ledger_query = sqlalchemy.text('''
+        INSERT INTO poshin_ledger (sku, quantity, transaction_id)
+        SELECT cart_potions.sku, -(cart_potions.quantity), :cart_id
+        FROM cart_potions
+        WHERE cart_potions.cart_id = :cart_id
+    ''')
 
-    # Before checking out, check if there is enough stock to fulfill the order
-    for cart_row in cart_rows:
-        available_stock = cat.CatalogInventory().retrieve(cart_row.sku).quantity
-        try:
-            assert available_stock >= cart_row.quantity, f"Not enough stock of [{cart_row.sku}]. Purchasing {cart_row.quantity} when only {available_stock} is available"
-        except AssertionError as e:
-            print(f"AssertionError: {e}")
-            return {"total_potions_bought": 0, "total_gold_paid": 0}
-
-    # Passing this for loop means there is enough stock to fulfill the order
-    potions_bought = 0
-    for cart_row in cart_rows:
-        potions_bought += cart_row.quantity
-
-        # decrement stock in catalog
-        available_stock = cat.CatalogInventory().retrieve(cart_row.sku).quantity
-        update_cat_query = sqlalchemy.text("UPDATE catalog SET quantity = :quantity WHERE sku = :sku")
+    try:
         with db.engine.begin() as connection:
-            connection.execute(update_cat_query,
-                {
-                    'quantity': available_stock - cart_row.quantity,
-                    'sku': cart_row.sku
-                }
-            )
+            cart_rows = connection.execute(cart_query, {'cart_id': cart_id}).fetchall()
+            if len(cart_rows) == 0:
+                raise Exception("This cart is checking out more than my stock")
 
-    # update gold in inventory
-    update_gi_query = sqlalchemy.text("UPDATE global_inventory SET gold = :gold")
-    with db.engine.begin() as connection:
-        connection.execute(update_gi_query, {'gold': global_inventory.gold + total })
+            # Getting the carts total and quantity of potions
+            price = 0
+            total_potions = 0
+            for row in cart_rows:
+                price += skutils.get_price(row.sku) * row.quantity
+                total_potions += row.quantity
 
-    return {"total_potions_bought": potions_bought, "total_gold_paid": total}
+            update_gold_ledger = connection.execute(gold_ledger_query, {
+                'price': price,
+                'cart_id': cart_id
+            })
+
+            update_poshin_ledger = connection.execute(poshin_ledger_query, {'cart_id': cart_id})
+    except Exception as e:
+        print(e)
+        return "ERROR"
+
+    return {"total_potions_bought": total_potions, "total_gold_paid": price}

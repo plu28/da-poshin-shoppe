@@ -30,16 +30,16 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
-    global_inventory = gi.GlobalInventory().retrieve() # Get current inventory state
 
+    # Get how much im paying and how much im buying from these barrels
     barrel_cost = 0
-    red = global_inventory.red_ml
-    green = global_inventory.green_ml
-    blue = global_inventory.blue_ml
-    dark = global_inventory.dark_ml
+    red = 0
+    green = 0
+    blue = 0
+    dark = 0
 
     for barrel in barrels_delivered:
-        barrel_cost += (barrel.price * barrel.quantity)
+        barrel_cost -= (barrel.price * barrel.quantity)
         if barrel.potion_type == [1,0,0,0]:
             red += (barrel.ml_per_barrel * barrel.quantity)
         elif barrel.potion_type == [0,1,0,0]:
@@ -49,27 +49,85 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
         elif barrel.potion_type == [0,0,0,1]:
             dark += (barrel.ml_per_barrel * barrel.quantity)
 
-    # Get new gold after purchasing barrels
-    new_gold = global_inventory.gold - barrel_cost
-
-    try:
-        assert new_gold >= 0, "Attempted to deliver barrels that I could not afford"
-    except AssertionError as e:
-        print(f"AssertionError: {e}")
-        return "ERROR"
-
-    # Update global inventory
-    update_query = sqlalchemy.text("UPDATE global_inventory SET gold = :gold, red_ml = :red_ml, green_ml = :green_ml, blue_ml = :blue_ml, dark_ml = :dark_ml")
-    with db.engine.begin() as connection:
-        connection.execute(update_query,
-            {
-                'gold': new_gold,
-                'red_ml': red,
-                'green_ml': green,
-                'blue_ml': blue,
-                'dark_ml': dark
-            }
+    # SQL statement:
+        # Retrieves current gold (necessary for the later WHERE EXISTS clause to check if I can afford this barrel delivery)
+        # Inserts into the global inventory ledger IF the following conditions are true:
+            # I can afford this (WHERE EXISTS)
+            # This order_id hasn't come in before (AND NOT EXISTS)
+    cte = '''
+        WITH current_inv AS (
+            SELECT
+                SUM(gold_ledger.gold_change) AS gold
+            FROM
+                gold_ledger
         )
+    '''
+
+    condition = '''
+        WHERE EXISTS (
+            SELECT
+                gold
+            FROM
+                current_inv
+            WHERE
+                gold > -(:barrel_cost)
+            )
+        AND NOT EXISTS (
+            SELECT
+                transaction_id
+            FROM
+                gold_ledger
+            WHERE
+                transaction_id = :order_id
+        )
+    '''
+
+    insert_gold_ledger_query = sqlalchemy.text(f'''
+        {cte}
+        INSERT INTO
+            gold_ledger (gold_change, transaction_id)
+        SELECT
+            :barrel_cost,
+            :order_id
+        {condition}
+    ''')
+
+    insert_ml_ledger_query = sqlalchemy.text(f'''
+        {cte}
+        INSERT INTO
+            ml_ledger (red, green, blue, dark, transaction_id)
+        SELECT
+            :red_ml, :green_ml, :blue_ml, :dark_ml, :order_id
+        {condition}
+        '''
+    )
+    with db.engine.begin() as connection:
+        try:
+            insert_ml = connection.execute(insert_ml_ledger_query,
+                {
+                    'red_ml': red,
+                    'green_ml': green,
+                    'blue_ml': blue,
+                    'dark_ml': dark,
+                    'order_id': order_id,
+                    'barrel_cost': barrel_cost
+                }
+            )
+            if insert_ml.rowcount == 0:
+                raise Exception("insert_ml affected 0 rows")
+
+            insert_gold = connection.execute(insert_gold_ledger_query,
+                {
+                    'barrel_cost': barrel_cost,
+                    'order_id': order_id
+                }
+            )
+            if insert_gold.rowcount == 0:
+                raise Exception("insert_gold affected 0 rows")
+
+        except Exception as e:
+            print(e)
+            return {"error": e}
 
     return "OK"
 
@@ -79,8 +137,11 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
     # Log endpoint
     log.post_log('/barrels/plan')
+
+    # Unnecessary transaction
     global_inventory = gi.GlobalInventory().retrieve() # Getting current state of inventory
 
+    # This check can be in the sql statement
     try:
         assert global_inventory.gold > 60, "Not enough gold to buy any barrels"
     except AssertionError as e:
@@ -92,6 +153,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text("DELETE FROM roxanne"))
 
+    # Don't need to log everything roxanne is selling into a seperate table.
     # Log everything roxanne is selling
     log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
     with db.engine.begin() as connection:

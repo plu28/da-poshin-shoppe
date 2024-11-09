@@ -1,6 +1,7 @@
 from math import gcd
 from src.utils import database as db
 import sqlalchemy
+import re
 
 class Strategy():
     def __init__(self, sku="", quantity=0,):
@@ -21,6 +22,34 @@ class Strategy():
                 strategy[row.sku] = row.quantity
 
             return strategy
+
+    def retrieve_as_need(self):
+        select_query = sqlalchemy.text("SELECT * FROM strategy")
+        with db.engine.begin() as connection:
+            select = connection.execute(select_query)
+        rows = select.fetchall()
+        if (rows == None):
+            return None
+        else:
+            need = {
+                'red': 0,
+                'green': 0,
+                'blue': 0,
+                'dark': 0
+            }
+            for row in rows:
+                for ml_quantity, color in re.findall(r"(\d+)([a-z]+)", row.sku):
+                    ml_quantity = int(ml_quantity) # typecasting to int
+                    if color == "red":
+                        need['red'] += ml_quantity * row.quantity
+                    elif color == "green":
+                        need['green'] += ml_quantity * row.quantity
+                    elif color == "blue":
+                        need['blue'] += ml_quantity * row.quantity
+                    elif color == "dark":
+                        need['dark'] += ml_quantity * row.quantity
+
+            return need
 
     def update(self, new_strat):
         # NOTE: WE'RE DOING AN UPDATE FOR EVERY ROW IN STRATEGY TABLE! NOT GOOD
