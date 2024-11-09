@@ -17,15 +17,32 @@ def reset():
     inventory, and all barrels are removed from inventory. Carts are all reset.
     """
     log.post_log('/reset')
+    reset_gold = sqlalchemy.text('''
+        INSERT INTO gold_ledger (gold_change)
+        SELECT (SELECT -gold FROM view_gold) AS gold_change
+    ''')
 
-    # Resetting global inventory table
-    with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text("UPDATE global_inventory SET red_ml = 0, green_ml = 0, blue_ml = 0, dark_ml = 0, gold = 100"))
+    reset_ml = sqlalchemy.text('''
+        INSERT INTO ml_ledger (red, green, blue, dark)
+        SELECT
+            (SELECT -red FROM view_ml) AS red,
+            (SELECT -green FROM view_ml) AS green,
+            (SELECT -blue FROM view_ml) AS blue,
+            (SELECT -dark FROM view_ml) AS dark
+    ''')
 
-    # Emptying out some tables
-    with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text("DELETE FROM cart_potions"))
-        connection.execute(sqlalchemy.text("DELETE FROM carts"))
-        connection.execute(sqlalchemy.text("DELETE FROM catalog"))
+    reset_poshin = sqlalchemy.text('''
+        INSERT INTO poshin_ledger (sku, quantity)
+        SELECT sku, -(quantity) FROM view_catalog
+    ''')
 
+    try:
+        with db.engine.begin() as connection:
+            connection.execute(reset_gold)
+            connection.execute(reset_ml)
+            connection.execute(reset_poshin)
+
+    except Exception as e:
+        print(e)
+        return "ERROR"
     return "OK"
