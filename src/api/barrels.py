@@ -138,199 +138,80 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     # Log endpoint
     log.post_log('/barrels/plan')
 
-    # Unnecessary transaction
-    global_inventory = gi.GlobalInventory().retrieve() # Getting current state of inventory
+    wholesale_catalog.sort(key = lambda barrel: -barrel.ml_per_barrel)
+    order = {}
+    with db.engine.begin() as connection:
+        gold = connection.execute(sqlalchemy.text("SELECT gold FROM view_gold")).scalar_one()
+    need = strat.Strategy().retrieve_as_need()
+    price = 0
+    red_cart = green_cart = blue_cart = dark_cart = 0
+    # Loop over need
+    while (red_cart < need['red']) or (green_cart < need['green']) or (blue_cart < need['blue']) or (dark_cart < need['dark']):
+        marker = 0
+        if red_cart < need['red']:
+            # Buy the biggest barrel we can afford
+            for barrel in wholesale_catalog:
+                if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [1,0,0,0]) and (red_cart < need['red']):
+                    if (barrel.sku in order.keys()):
+                        order[barrel.sku] += 1
+                    else:
+                        order[barrel.sku] = 1
+                    price += barrel.price
+                    barrel.quantity -= 1
+                    red_cart += barrel.ml_per_barrel
+                    marker += 1
+                    break
+        if green_cart < need['green']:
+            # Buy the biggest barrel we can afford
+            for barrel in wholesale_catalog:
+                if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,1,0,0]) and (green_cart < need['green']):
+                    if (barrel.sku in order.keys()):
+                        order[barrel.sku] += 1
+                    else:
+                        order[barrel.sku] = 1
+                    price += barrel.price
+                    barrel.quantity -= 1
+                    green_cart += barrel.ml_per_barrel
+                    marker += 1
+                    break
+        if blue_cart < need['blue']:
+            # Buy the biggest barrel we can afford
+            for barrel in wholesale_catalog:
+                if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,0,1,0]) and (blue_cart < need['blue']):
+                    if (barrel.sku in order.keys()):
+                        order[barrel.sku] += 1
+                    else:
+                        order[barrel.sku] = 1
+                    price += barrel.price
+                    barrel.quantity -= 1
+                    blue_cart += barrel.ml_per_barrel
+                    marker += 1
+                    break
+        if dark_cart < need['dark']:
+            # Buy the biggest barrel we can afford
+            for barrel in wholesale_catalog:
+                if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,0,0,1]) and (dark_cart < need['dark']):
+                    if (barrel.sku in order.keys()):
+                        order[barrel.sku] += 1
+                    else:
+                        order[barrel.sku] = 1
+                    price += barrel.price
+                    barrel.quantity -= 1
+                    dark_cart += barrel.ml_per_barrel
+                    marker += 1
+                    break
+        if marker == 0:
+            break
 
-    # This check can be in the sql statement
-    try:
-        assert global_inventory.gold > 60, "Not enough gold to buy any barrels"
-    except AssertionError as e:
-        print(f"AssertionError: {e}")
+    # we either fill the need or buy nothing
+    if (red_cart < need['red']) or (green_cart < need['green']) or (blue_cart < need['blue']) or (dark_cart < need['dark']):
+        print("BARREL PLAN ERROR: Could not afford strategy")
         return []
 
-    # TODO: UNCOMMENT AFTER LOGGING WHAT HER INVENTORY LOOKS LIKE
-    # Drop what roxanne sold in the last barrels call
-    with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text("DELETE FROM roxanne"))
-
-    # Don't need to log everything roxanne is selling into a seperate table.
-    # Log everything roxanne is selling
-    log_query = sqlalchemy.text("INSERT INTO roxanne (sku, ml_per_barrel, potion_type, price, quantity) VALUES (:sku, :ml_per_barrel, :potion_type, :price, :quantity)")
-    with db.engine.begin() as connection:
-        for barrel in wholesale_catalog:
-            connection.execute(log_query,
-                {
-                    'sku': barrel.sku,
-                    'ml_per_barrel': barrel.ml_per_barrel,
-                    'potion_type': barrel.potion_type,
-                    'price': barrel.price,
-                    'quantity': barrel.quantity
-                }
-            )
-
-    new_strat = strat.Strategy().retrieve_as_dict()
-    try:
-        assert new_strat != None, "Strategy is empty"
-    except AssertionError as e:
-        print(f"AssertionError: {e}")
-        return []
-
-
-    while(sum(new_strat.values()) != 0):
-        print(new_strat)
-        barrels_im_buying = []
-        price = 0
-
-        red_need = green_need = blue_need = dark_need = 0 # Count up exactly how much of each type I need to buy
-        # subtract any pre-existing stock
-        red_need -= global_inventory.red_ml
-        green_need -= global_inventory.green_ml
-        blue_need -= global_inventory.blue_ml
-        dark_need -= global_inventory.dark_ml
-
-        # Get how many ml we need for the strategy
-        for sku, quantity in new_strat.items():
-            # Since sku corresponds to potion makeup, I can use regex
-            for ml_quantity, color in re.findall(r"(\d+)([a-z]+)", sku):
-                ml_quantity = int(ml_quantity) # typecasting to int
-                if color == "red":
-                    red_need += ml_quantity * quantity
-                elif color == "green":
-                    green_need += ml_quantity * quantity
-                elif color == "blue":
-                    blue_need += ml_quantity * quantity
-                elif color == "dark":
-                    dark_need += ml_quantity * quantity
-
-        print(f"[{red_need},{green_need},{blue_need},{dark_need}]")
-        # Greedy algorithm. If I don't have enough gold, adjust the strategy by removing 1 potion and trying again
-        # NOTE: This is an approximate solution which means its sub-optimal. There will be better barrel purchasing combinations
-        # TODO: Rewrite to be more maintainable
-
-        # Sort offerings by ml (larger barrels are better value)
-        with db.engine.begin() as connection:
-            if red_need > 0:
-                red_barrels = connection.execute(sqlalchemy.text("SELECT * FROM roxanne WHERE potion_type = ARRAY[1,0,0,0] ORDER BY ml_per_barrel DESC")).fetchall()
-                for red_barrel in red_barrels:
-                    # print(f"{red_barrel.sku}")
-                    if red_barrel.ml_per_barrel <= red_need:
-                        quantity = red_need // red_barrel.ml_per_barrel
-                        if (quantity > red_barrel.quantity):
-                            quantity = red_barrel.quantity
-                        red_need -= red_barrel.ml_per_barrel * quantity
-                        price += red_barrel.price * quantity
-                        barrels_im_buying.append({'sku':red_barrel.sku, 'quantity': quantity})
-            if green_need > 0:
-                green_barrels = connection.execute(sqlalchemy.text("SELECT * FROM roxanne WHERE potion_type = ARRAY[0,1,0,0] ORDER BY ml_per_barrel DESC")).fetchall()
-                for green_barrel in green_barrels:
-                    if green_barrel.ml_per_barrel <= green_need:
-                        quantity = green_need // green_barrel.ml_per_barrel
-                        if (quantity > green_barrel.quantity):
-                            quantity = green_barrel.quantity
-                        green_need -= green_barrel.ml_per_barrel * quantity
-                        price += green_barrel.price * quantity
-                        barrels_im_buying.append({'sku':green_barrel.sku, 'quantity': quantity})
-            if blue_need > 0:
-                blue_barrels = connection.execute(sqlalchemy.text("SELECT * FROM roxanne WHERE potion_type = ARRAY[0,0,1,0] ORDER BY ml_per_barrel DESC")).fetchall()
-                for blue_barrel in blue_barrels:
-                    if blue_barrel.ml_per_barrel <= blue_need:
-                        quantity = blue_need // blue_barrel.ml_per_barrel
-                        if (quantity > blue_barrel.quantity):
-                            quantity = blue_barrel.quantity
-                        blue_need -= blue_barrel.ml_per_barrel * quantity
-                        price += blue_barrel.price * quantity
-                        barrels_im_buying.append({'sku':blue_barrel.sku, 'quantity': quantity})
-            if dark_need > 0:
-                dark_barrels = connection.execute(sqlalchemy.text("SELECT * FROM roxanne WHERE potion_type = ARRAY[0,0,0,1] ORDER BY ml_per_barrel DESC")).fetchall()
-                for dark_barrel in dark_barrels:
-                    if dark_barrel.ml_per_barrel <= dark_need:
-                        quantity = dark_need // dark_barrel.ml_per_barrel
-                        if (quantity > dark_barrel.quantity):
-                            quantity = dark_barrel.quantity
-                        dark_need -= dark_barrel.ml_per_barrel * quantity
-                        price += dark_barrel.price * quantity
-                        barrels_im_buying.append({'sku':dark_barrel.sku, 'quantity': quantity})
-
-        # BAD Barrel fix: buy small barrels until ml need is for sure met
-        if red_need > 0:
-            small_red_barrel = rox.Roxanne().retrieve("SMALL_RED_BARREL")
-            try:
-                assert small_red_barrel != None, "Roxanne selling no SMALL_RED_BARREL"
-            except AssertionError as e:
-                print(f"AssertionError: {e}")
-                return []
-            quantity = (red_need // small_red_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
-            try:
-                # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
-                assert quantity < small_red_barrel.quantity != None, "Roxanne not selling enough small SMALL_RED_BARREL"
-            except AssertionError as e:
-                print(f"AssertionError: {e}")
-                return []
-            price += small_red_barrel.price * quantity
-            red_need -= small_red_barrel.ml_per_barrel * quantity
-            if not update_list_dictionary(barrels_im_buying, small_red_barrel.sku, quantity):
-                barrels_im_buying.append({'sku':small_red_barrel.sku, 'quantity': quantity})
-
-        if blue_need > 0:
-            small_blue_barrel = rox.Roxanne().retrieve("SMALL_BLUE_BARREL")
-            try:
-                assert small_blue_barrel != None, "Roxanne selling no SMALL_BLUE_BARREL"
-            except AssertionError as e:
-                print(f"AssertionError: {e}")
-                return []
-            quantity = (blue_need // small_blue_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
-            try:
-                # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
-                assert quantity < small_blue_barrel.quantity != None, "Roxanne not selling enough small SMALL_BLUE_BARREL"
-            except AssertionError as e:
-                print(f"AssertionError: {e}")
-                return []
-            price += small_blue_barrel.price * quantity
-            blue_need -= small_blue_barrel.ml_per_barrel * quantity
-            if not update_list_dictionary(barrels_im_buying, small_blue_barrel.sku, quantity):
-                barrels_im_buying.append({'sku':small_blue_barrel.sku, 'quantity': quantity})
-
-
-        if green_need > 0:
-            small_green_barrel = rox.Roxanne().retrieve("SMALL_GREEN_BARREL")
-            try:
-                assert small_green_barrel != None, "Roxanne selling no SMALL_GREEN_BARREL"
-            except AssertionError as e:
-                print(f"AssertionError: {e}")
-                return []
-            quantity = (green_need // small_green_barrel.ml_per_barrel) + 1 # amount of small barrels we need to buy
-            try:
-                # NOTE: This does not account for any quantity of barrels already in my cart. This condition is error prone.
-                assert quantity < small_green_barrel.quantity != None, "Roxanne not selling enough small SMALL_GREEN_BARREL"
-            except AssertionError as e:
-                print(f"AssertionError: {e}")
-                return []
-            price += small_green_barrel.price * quantity
-            green_need -= small_green_barrel.ml_per_barrel * quantity
-            if not update_list_dictionary(barrels_im_buying, small_green_barrel.sku, quantity):
-                barrels_im_buying.append({'sku':small_green_barrel.sku, 'quantity': quantity})
-
-        # There are no small dark barrels. Can only buy large ones.
-        # At this point, the total amount of ml we're buying should have our total need be met
-
-        # Check if we can even afford this
-        if (price <= global_inventory.gold):
-            # update table with the strategy we ended up with
-            print(f"Successfully purchased barrels: {barrels_im_buying}")
-            strat.Strategy().update(new_strat)
-            return json.loads(json.dumps(barrels_im_buying))
-        else:
-            # decrement the potion with the largest quantity (preserving a diverse catalog)
-            largest_key = max(new_strat, key = new_strat.get)
-            new_strat[largest_key] -= 1
-
-    print("Could not afford any barrels this tick")
-    return []
-
-# Updates a dictionary in a list of dictionaries with a new value
-def update_list_dictionary(list_dict, sku, add_val):
-    for dict in list_dict:
-        if sku in list(dict.values()):
-            dict['quantity'] += add_val
-            return True
-    return False
+    return_list = []
+    for barrel_sku, quantity in order.items():
+        return_list.append({
+            "sku": barrel_sku,
+            "quantity": quantity
+        })
+    return json.loads(json.dumps(return_list))
