@@ -93,6 +93,10 @@ def search_orders(
     else:
         search_page_int = int(search_page)
 
+    # javascript
+    if search_page_int == -1:
+        search_page_int = 0
+
     search_query = sqlalchemy.text(f'''
         SELECT
             cart_potions.quantity || ' ' || cart_potions.sku AS item_sku,
@@ -141,7 +145,12 @@ def search_orders(
     else:
         prev = search_page_int - 5
 
+    # javascript
+    if (prev == 0):
+        prev = -1
 
+    print(prev)
+    print(next)
     return {
         "previous": prev,
         "next": next,
