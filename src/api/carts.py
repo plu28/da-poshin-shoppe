@@ -136,7 +136,7 @@ def search_orders(
     else:
         next = search_page_int + 5
 
-    if search_page_int < 5:
+    if search_page_int <= 5:
         prev = ""
     else:
         prev = search_page_int - 5
