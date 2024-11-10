@@ -60,7 +60,7 @@ class search_sort_order(str, Enum):
 def search_orders(
     customer_name: str = "",
     potion_sku: str = "",
-    search_page: int = 0,
+    search_page: str = "",
     sort_col: search_sort_options = search_sort_options.timestamp,
     sort_order: search_sort_order = search_sort_order.desc,
 ):
@@ -88,6 +88,10 @@ def search_orders(
     Your results must be paginated, the max results you can return at any
     time is 5 total line items.
     """
+    if search_page == "":
+        search_page_int = 0
+    else:
+        search_page_int = int(search_page)
 
     search_query = sqlalchemy.text(f'''
         SELECT
@@ -113,27 +117,29 @@ def search_orders(
             search_result_query = connection.execute(search_query, {
                 'customer_name': '%' + customer_name + '%',
                 'potion_sku': '%' + potion_sku + '%',
-                'search_page': search_page
+                'search_page': search_page_int
             })
     except Exception as e:
         print(e)
         return {'error': e}
 
     results = []
-    for search_result in search_result_query.mappings():
+    for i, search_result in enumerate(search_result_query.mappings()):
+        if (i > 4):
+            break
         search_result = dict(search_result)
         search_result['timestamp'] = search_result['timestamp'].isoformat()
         results.append(search_result)
 
-    if search_result_query.rowcount - search_page <= 5:
+    if search_result_query.rowcount - search_page_int <= 5:
         next = ""
     else:
-        next = f"/carts/search/?search_page={search_page + 5}&sort_col={sort_col.value}&sort_order={sort_order.value}"
+        next = f"/carts/search/?search_page={search_page_int + 5}&sort_col={sort_col.value}&sort_order={sort_order.value}"
 
-    if search_result_query.rowcount - search_page < 0:
+    if search_page_int < 5:
         prev = ""
     else:
-        prev = f"/carts/search/?search_page={search_page - 5}&sort_col={sort_col.value}&sort_order={sort_order.value}"
+        prev = f"/carts/search/?search_page={search_page_int - 5}&sort_col={sort_col.value}&sort_order={sort_order.value}"
 
 
     return {
