@@ -91,7 +91,7 @@ def search_orders(
 
     search_query = sqlalchemy.text(f'''
         SELECT
-            cart_potions.sku AS sku,
+            cart_potions.sku AS item_sku,
             cart_potions.quantity AS quantity,
             carts.customer_name AS customer_name,
             completed_carts.created_at AS timestamp,
@@ -106,12 +106,14 @@ def search_orders(
             customer_name ILIKE :customer_name
             AND sku ILIKE :potion_sku
         ORDER BY {sort_col.value} {sort_order.value}
+        LIMIT 5
     ''')
     try:
         with db.engine.begin() as connection:
             search_result_mappings = connection.execute(search_query, {
                 'customer_name': '%' + customer_name + '%',
                 'potion_sku': '%' + potion_sku + '%',
+                'search_page': search_page
             }).mappings()
     except Exception as e:
         print(e)
@@ -120,19 +122,18 @@ def search_orders(
     results = []
     for i, search_result in enumerate(search_result_mappings):
         search_result = dict(search_result)
-        search_result['item_sku'] = f"{search_result['quantity']} {search_result['sku']}"
+        search_result['item_sku'] = f"{search_result['quantity']} {search_result['item_sku']}"
         search_result['timestamp'] = search_result['timestamp'].isoformat()
+        search_result['line_item_id'] = + i
 
-        search_result['line_item_id'] = i
-
-        # Remove these key value pairs to fit api spec
+        # Remove key value pair to fit api spec
         del search_result['quantity']
-        del search_result['sku']
         results.append(search_result)
+
 
     return {
         "previous": "",
-        "next": "",
+        "next": "/carts/search/?sort_col=timestamp&sort_order=desc",
         "results": json.loads(json.dumps(results))
     }
 
