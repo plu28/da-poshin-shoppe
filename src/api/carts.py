@@ -134,12 +134,12 @@ def search_orders(
     if search_result_query.rowcount - search_page_int <= 5:
         next = ""
     else:
-        next = f"/carts/search/?search_page={search_page_int + 5}&sort_col={sort_col.value}&sort_order={sort_order.value}"
+        next = search_page_int + 5
 
     if search_page_int < 5:
         prev = ""
     else:
-        prev = f"/carts/search/?search_page={search_page_int - 5}&sort_col={sort_col.value}&sort_order={sort_order.value}"
+        prev = search_page_int - 5
 
 
     return {
