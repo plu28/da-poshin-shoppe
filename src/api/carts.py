@@ -60,7 +60,7 @@ class search_sort_order(str, Enum):
 def search_orders(
     customer_name: str = "",
     potion_sku: str = "",
-    search_page: str = "",
+    search_page: int = 0,
     sort_col: search_sort_options = search_sort_options.timestamp,
     sort_order: search_sort_order = search_sort_order.desc,
 ):
@@ -91,8 +91,8 @@ def search_orders(
 
     search_query = sqlalchemy.text(f'''
         SELECT
-            cart_potions.sku AS item_sku,
-            cart_potions.quantity AS quantity,
+            cart_potions.quantity || ' ' || cart_potions.sku AS item_sku,
+            cart_potions.id AS line_item_id,
             carts.customer_name AS customer_name,
             completed_carts.created_at AS timestamp,
             completed_carts.line_item_total AS line_item_total
@@ -106,34 +106,39 @@ def search_orders(
             customer_name ILIKE :customer_name
             AND sku ILIKE :potion_sku
         ORDER BY {sort_col.value} {sort_order.value}
-        LIMIT 5
+        OFFSET :search_page
     ''')
     try:
         with db.engine.begin() as connection:
-            search_result_mappings = connection.execute(search_query, {
+            search_result_query = connection.execute(search_query, {
                 'customer_name': '%' + customer_name + '%',
                 'potion_sku': '%' + potion_sku + '%',
                 'search_page': search_page
-            }).mappings()
+            })
     except Exception as e:
         print(e)
         return {'error': e}
 
     results = []
-    for i, search_result in enumerate(search_result_mappings):
+    for search_result in search_result_query.mappings():
         search_result = dict(search_result)
-        search_result['item_sku'] = f"{search_result['quantity']} {search_result['item_sku']}"
         search_result['timestamp'] = search_result['timestamp'].isoformat()
-        search_result['line_item_id'] = + i
-
-        # Remove key value pair to fit api spec
-        del search_result['quantity']
         results.append(search_result)
+
+    if search_result_query.rowcount - search_page <= 5:
+        next = ""
+    else:
+        next = f"/carts/search/?search_page={search_page + 5}&sort_col={sort_col.value}&sort_order={sort_order.value}"
+
+    if search_result_query.rowcount - search_page < 0:
+        prev = ""
+    else:
+        prev = f"/carts/search/?search_page={search_page - 5}&sort_col={sort_col.value}&sort_order={sort_order.value}"
 
 
     return {
-        "previous": "",
-        "next": "/carts/search/?sort_col=timestamp&sort_order=desc",
+        "previous": prev,
+        "next": next,
         "results": json.loads(json.dumps(results))
     }
 
