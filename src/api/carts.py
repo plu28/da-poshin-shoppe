@@ -131,12 +131,12 @@ def search_orders(
         search_result['timestamp'] = search_result['timestamp'].isoformat()
         results.append(search_result)
 
-    if search_result_query.rowcount - search_page_int <= 5:
+    if search_result_query.rowcount - search_page_int < 0:
         next = ""
     else:
         next = search_page_int + 5
 
-    if search_page_int <= 5:
+    if search_page_int < 5:
         prev = ""
     else:
         prev = search_page_int - 5
