@@ -19,7 +19,7 @@ def reset():
     log.post_log('/reset')
     reset_gold = sqlalchemy.text('''
         INSERT INTO gold_ledger (gold_change)
-        SELECT (SELECT -gold FROM view_gold) AS gold_change
+        SELECT (SELECT -(gold) + 100 FROM view_gold) AS gold_change
     ''')
 
     reset_ml = sqlalchemy.text('''
@@ -36,11 +36,16 @@ def reset():
         SELECT sku, -(quantity) FROM view_catalog
     ''')
 
+    reset_carts = sqlalchemy.text('''
+        TRUNCATE TABLE cart_potions, completed_carts, carts
+    ''')
+
     try:
         with db.engine.begin() as connection:
             connection.execute(reset_gold)
             connection.execute(reset_ml)
             connection.execute(reset_poshin)
+            connection.execute(reset_carts)
 
     except Exception as e:
         print(e)
