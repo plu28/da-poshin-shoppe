@@ -119,7 +119,9 @@ def get_bottle_plan():
 
     # calculating how much of each ml my strategy calls for
     for sku, quantity in mystrat.items():
+        # print(f"{sku}")
         if quantity == 0:
+            # print(f"skipping {sku}")
             continue
         red_ml = green_ml = blue_ml = dark_ml = 0
         order = {}
@@ -139,9 +141,9 @@ def get_bottle_plan():
                 available_dark -= ml_quantity
                 dark_ml += ml_quantity
 
-            order['potion_type'] = [red_ml, green_ml, blue_ml, dark_ml]
-            order['quantity'] = quantity
-            bottle_plan.append(order)
+        order['potion_type'] = [red_ml, green_ml, blue_ml, dark_ml]
+        order['quantity'] = quantity
+        bottle_plan.append(order)
 
     # Check that we aren't bottling more than what's available
     try:
@@ -156,18 +158,42 @@ def get_bottle_plan():
 
     return json.loads(json.dumps(bottle_plan))
 
-
-def type_to_sku(potion_type):
-    sku = []
-    if potion_type[0] > 0:
-        sku.append(f"{potion_type[0]}red")
-    if potion_type[1] > 0:
-        sku.append(f"{potion_type[1]}green")
-    if potion_type[2] > 0:
-        sku.append(f"{potion_type[2]}blue")
-    if potion_type[3] > 0:
-        sku.append(f"{potion_type[3]}dark")
-    return "".join(sku)
-
 if __name__ == "__main__":
     print(get_bottle_plan())
+
+# [
+#   {
+#     "sku": "SMALL_RED_BARREL",
+#     "ml_per_barrel": 500,
+#     "potion_type": [1,0,0,0],
+#     "price": 100,
+#     "quantity": 2
+#   },
+  # {
+  #   "sku": "SMALL_GREEN_BARREL",
+  #   "ml_per_barrel": 500,
+  #   "potion_type": [0,1,0,0],
+  #   "price": 100,
+  #   "quantity": 1
+  # },
+  # {
+  #     "sku": "MINI_GREEN_BARREL",
+  #     "ml_per_barrel": 200,
+  #     "potion_type": [0,1,0,0],
+  #     "price": 60,
+  #     "quantity": 1
+  # }
+#   {
+#     "sku": "SMALL_BLUE_BARREL",
+#     "ml_per_barrel": 500,
+#     "potion_type": [0,0,1,0],
+#     "price": 100,
+#     "quantity": 2
+#   }
+# ]
+# [
+#   {
+#     "sku": "MINI_GREEN_BARREL",
+#     "quantity": 1
+#   }
+# ]

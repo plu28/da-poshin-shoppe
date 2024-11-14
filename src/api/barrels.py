@@ -8,7 +8,7 @@ from src.utils import database as db
 from src.tables import global_inventory as gi
 from src.tables import catalog_table as cat
 from src.tables import roxanne as rox
-from src.utils import log
+from src.utils import log, strategy
 from src.tables import strategy as strat
 import re
 
@@ -70,7 +70,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             FROM
                 current_inv
             WHERE
-                gold > -(:barrel_cost)
+                gold >= -(:barrel_cost)
             )
         AND NOT EXISTS (
             SELECT
@@ -131,82 +131,177 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 
     return "OK"
 
-# Gets called once a day
+# Gets called every other tick
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
     # Log endpoint
     log.post_log('/barrels/plan')
 
+    # Determine strategy once
+    strategy.determine_strategy()
+
     wholesale_catalog.sort(key = lambda barrel: -barrel.ml_per_barrel)
     order = {}
     with db.engine.begin() as connection:
         gold = connection.execute(sqlalchemy.text("SELECT gold FROM view_gold")).scalar_one()
-    need = strat.Strategy().retrieve_as_need()
     price = 0
     red_cart = green_cart = blue_cart = dark_cart = 0
-    # Loop over need
-    while (red_cart < need['red']) or (green_cart < need['green']) or (blue_cart < need['blue']) or (dark_cart < need['dark']):
-        marker = 0
-        if red_cart < need['red']:
-            # Buy the biggest barrel we can afford
-            for barrel in wholesale_catalog:
-                if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [1,0,0,0]) and (red_cart < need['red']):
-                    if (barrel.sku in order.keys()):
-                        order[barrel.sku] += 1
-                    else:
-                        order[barrel.sku] = 1
-                    price += barrel.price
-                    barrel.quantity -= 1
-                    red_cart += barrel.ml_per_barrel
-                    marker += 1
-                    break
-        if green_cart < need['green']:
-            # Buy the biggest barrel we can afford
-            for barrel in wholesale_catalog:
-                if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,1,0,0]) and (green_cart < need['green']):
-                    if (barrel.sku in order.keys()):
-                        order[barrel.sku] += 1
-                    else:
-                        order[barrel.sku] = 1
-                    price += barrel.price
-                    barrel.quantity -= 1
-                    green_cart += barrel.ml_per_barrel
-                    marker += 1
-                    break
-        if blue_cart < need['blue']:
-            # Buy the biggest barrel we can afford
-            for barrel in wholesale_catalog:
-                if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,0,1,0]) and (blue_cart < need['blue']):
-                    if (barrel.sku in order.keys()):
-                        order[barrel.sku] += 1
-                    else:
-                        order[barrel.sku] = 1
-                    price += barrel.price
-                    barrel.quantity -= 1
-                    blue_cart += barrel.ml_per_barrel
-                    marker += 1
-                    break
-        if dark_cart < need['dark']:
-            # Buy the biggest barrel we can afford
-            for barrel in wholesale_catalog:
-                if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,0,0,1]) and (dark_cart < need['dark']):
-                    if (barrel.sku in order.keys()):
-                        order[barrel.sku] += 1
-                    else:
-                        order[barrel.sku] = 1
-                    price += barrel.price
-                    barrel.quantity -= 1
-                    dark_cart += barrel.ml_per_barrel
-                    marker += 1
-                    break
-        if marker == 0:
-            break
 
-    # we either fill the need or buy nothing
-    if (red_cart < need['red']) or (green_cart < need['green']) or (blue_cart < need['blue']) or (dark_cart < need['dark']):
-        print("BARREL PLAN ERROR: Could not afford strategy")
-        return []
+    need = strat.Strategy().retrieve_as_need()
+    # Loop while strategy is not empty
+    while (need['red'] > 0, need['green'] > 0, need['blue'] > 0, need['dark'] > 0):
+        need = strat.Strategy().retrieve_as_need()
+        print(f"{red_cart} : {need['red']}")
+        print(f"{green_cart} : {need['green']}")
+        # Loop while there is need
+        while (red_cart < need['red']) or (green_cart < need['green']) or (blue_cart < need['blue']) or (dark_cart < need['dark']):
+            marker = 0
+            if red_cart < need['red']:
+                # Buy the biggest barrel we can afford
+                for barrel in wholesale_catalog:
+                    if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [1,0,0,0]) and (red_cart < need['red']):
+                        if (barrel.sku in order.keys()):
+                            order[barrel.sku] += 1
+                        else:
+                            order[barrel.sku] = 1
+                        price += barrel.price
+                        barrel.quantity -= 1
+                        red_cart += barrel.ml_per_barrel
+                        marker += 1
+                        break
+            if green_cart < need['green']:
+                # Buy the biggest barrel we can afford
+                for barrel in wholesale_catalog:
+                    if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,1,0,0]) and (green_cart < need['green']):
+                        if (barrel.sku in order.keys()):
+                            order[barrel.sku] += 1
+                        else:
+                            order[barrel.sku] = 1
+                        price += barrel.price
+                        barrel.quantity -= 1
+                        green_cart += barrel.ml_per_barrel
+                        marker += 1
+                        break
+            if blue_cart < need['blue']:
+                # Buy the biggest barrel we can afford
+                for barrel in wholesale_catalog:
+                    if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,0,1,0]) and (blue_cart < need['blue']):
+                        if (barrel.sku in order.keys()):
+                            order[barrel.sku] += 1
+                        else:
+                            order[barrel.sku] = 1
+                        price += barrel.price
+                        barrel.quantity -= 1
+                        blue_cart += barrel.ml_per_barrel
+                        marker += 1
+                        break
+            if dark_cart < need['dark']:
+                # Buy the biggest barrel we can afford
+                for barrel in wholesale_catalog:
+                    if (barrel.quantity > 0) and (gold >= barrel.price + price) and (barrel.potion_type == [0,0,0,1]) and (dark_cart < need['dark']):
+                        if (barrel.sku in order.keys()):
+                            order[barrel.sku] += 1
+                        else:
+                            order[barrel.sku] = 1
+                        price += barrel.price
+                        barrel.quantity -= 1
+                        dark_cart += barrel.ml_per_barrel
+                        marker += 1
+                        break
+            if marker == 0:
+                break
+
+        try:
+            with db.engine.begin() as connection:
+            # we either fill the need or buy nothing
+                if (red_cart < need['red']):
+                    # reduce quantity of a potion containing red
+                    decrease_red_potions = sqlalchemy.text('''
+                    WITH red_skus AS (
+                        SELECT
+                            sku
+                        FROM
+                            strategy
+                        WHERE
+                            sku ILIKE '%red%'
+                    )
+                    UPDATE
+                        strategy
+                    SET
+                        quantity = quantity - 1
+                    WHERE
+                        strategy.sku IN (SELECT red_skus.sku FROM red_skus)
+                        AND quantity > 0
+                    ''')
+                    connection.execute(decrease_red_potions)
+                if (green_cart < need['green']):
+                    # reduce quantity of a potion containing green in strategy
+                    decrease_green_potions = sqlalchemy.text('''
+                    WITH green_skus AS (
+                        SELECT
+                            sku
+                        FROM
+                            strategy
+                        WHERE
+                            sku ILIKE '%green%'
+                    )
+                    UPDATE
+                        strategy
+                    SET
+                        quantity = quantity - 1
+                    WHERE
+                        strategy.sku IN (SELECT green_skus.sku FROM green_skus)
+                        AND quantity > 0
+                    ''')
+                    connection.execute(decrease_green_potions)
+                if (blue_cart < need['blue']):
+                    # reduce quantity of a potion containing blue
+                    decrease_blue_potions = sqlalchemy.text('''
+                    WITH blue_skus AS (
+                        SELECT
+                            sku
+                        FROM
+                            strategy
+                        WHERE
+                            sku ILIKE '%blue%'
+                    )
+                    UPDATE
+                        strategy
+                    SET
+                        quantity = quantity - 1
+                    WHERE
+                        strategy.sku IN (SELECT blue_skus.sku FROM blue_skus)
+                        AND quantity > 0
+                    ''')
+                    connection.execute(decrease_blue_potions)
+                if (dark_cart < need['dark']):
+                    # reduce quantity of a potion containing dark
+                    decrease_dark_potions = sqlalchemy.text('''
+                    WITH dark_skus AS (
+                        SELECT
+                            sku
+                        FROM
+                            strategy
+                        WHERE
+                            sku ILIKE '%dark%'
+                    )
+                    UPDATE
+                        strategy
+                    SET
+                        quantity = quantity - 1
+                    WHERE
+                        strategy.sku IN (SELECT dark_skus.sku FROM dark_skus)
+                        AND quantity > 0
+                    ''')
+                    connection.execute(decrease_dark_potions)
+                if (red_cart >= need['red'] and green_cart >= need['green'] and blue_cart >= need['blue'] and dark_cart >= need['dark']):
+                    # break out of the loop. we've fulfilled the need
+                    print("breaking out of loop")
+                    break
+        except Exception as e:
+            print(e)
+            return []
 
     return_list = []
     for barrel_sku, quantity in order.items():

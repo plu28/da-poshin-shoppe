@@ -171,30 +171,30 @@ def post_visits(visit_id: int, customers: list[Customer]):
     log.post_log(f'/carts/visits/{visit_id}')
 
     # Insert any new customers to the customers table
-    for customer in customers:
-        customer_row = customer_table.Customers().retrieve(customer.customer_name)
-        if (customer_row == None):
-            # First-time customer needs to be appended to customers table
-            insert_query = sqlalchemy.text("INSERT INTO customers(customer_name, character_class, level, visit_count) VALUES (:customer_name, :character_class, :level, :visit_count)")
-            with db.engine.begin() as connection:
-                connection.execute(insert_query,
-                    {
-                        'customer_name': customer.customer_name,
-                        'character_class': customer.character_class,
-                        'level': customer.level,
-                        'visit_count': 1
-                    }
-                )
-        else:
-            # Customer has previously visited, increment their visit count
-            update_query = sqlalchemy.text("UPDATE customers SET visit_count = :visit_count WHERE customer_name = :customer_name")
-            with db.engine.begin() as connection:
-                connection.execute(update_query,
-                    {
-                        'visit_count': customer_row.visit_count + 1,
-                        'customer_name': customer_row.customer_name
-                    }
-                )
+    # for customer in customers:
+    #     customer_row = customer_table.Customers().retrieve(customer.customer_name)
+    #     if (customer_row == None):
+    #         # First-time customer needs to be appended to customers table
+    #         insert_query = sqlalchemy.text("INSERT INTO customers(customer_name, character_class, level, visit_count) VALUES (:customer_name, :character_class, :level, :visit_count)")
+    #         with db.engine.begin() as connection:
+    #             connection.execute(insert_query,
+    #                 {
+    #                     'customer_name': customer.customer_name,
+    #                     'character_class': customer.character_class,
+    #                     'level': customer.level,
+    #                     'visit_count': 1
+    #                 }
+    #             )
+    #     else:
+    #         # Customer has previously visited, increment their visit count
+    #         update_query = sqlalchemy.text("UPDATE customers SET visit_count = :visit_count WHERE customer_name = :customer_name")
+    #         with db.engine.begin() as connection:
+    #             connection.execute(update_query,
+    #                 {
+    #                     'visit_count': customer_row.visit_count + 1,
+    #                     'customer_name': customer_row.customer_name
+    #                 }
+    #             )
 
     return [{"success": True}]
 

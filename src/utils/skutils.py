@@ -28,3 +28,15 @@ def get_type(sku: str):
         elif color == "dark":
             type[3] = ml_quantity
     return type
+
+def type_to_sku(potion_type):
+    sku = []
+    if potion_type[0] > 0:
+        sku.append(f"{potion_type[0]}red")
+    if potion_type[1] > 0:
+        sku.append(f"{potion_type[1]}green")
+    if potion_type[2] > 0:
+        sku.append(f"{potion_type[2]}blue")
+    if potion_type[3] > 0:
+        sku.append(f"{potion_type[3]}dark")
+    return "".join(sku)

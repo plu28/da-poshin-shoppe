@@ -24,18 +24,34 @@ class Strategy():
             return strategy
 
     def retrieve_as_need(self):
-        select_query = sqlalchemy.text("SELECT * FROM strategy")
+        ml_query = sqlalchemy.text('''
+            SELECT
+                red,
+                green,
+                blue,
+                dark
+            FROM
+                view_ml
+        ''')
+
+        select_query = sqlalchemy.text('''
+            SELECT
+                *
+            FROM
+                strategy
+        ''')
         with db.engine.begin() as connection:
             select = connection.execute(select_query)
+            current_ml = connection.execute(ml_query).fetchone()
         rows = select.fetchall()
         if (rows == None):
             return None
         else:
             need = {
-                'red': 0,
-                'green': 0,
-                'blue': 0,
-                'dark': 0
+                'red': -current_ml.red,
+                'green': -current_ml.green,
+                'blue': -current_ml.blue,
+                'dark': -current_ml.dark
             }
             for row in rows:
                 for ml_quantity, color in re.findall(r"(\d+)([a-z]+)", row.sku):
@@ -49,6 +65,7 @@ class Strategy():
                     elif color == "dark":
                         need['dark'] += ml_quantity * row.quantity
 
+            print(f"FROM STRAT TABLE CLASS {need}")
             return need
 
     def update(self, new_strat):
