@@ -27,6 +27,5 @@ def post_time(timestamp: Timestamp):
     """
     # LOGGING
     log.post_log("/current_time", request=json.dumps(timestamp.__dict__))
-    strategy.determine_strategy()
 
     return "OK"

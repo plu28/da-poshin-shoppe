@@ -152,8 +152,6 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     # Loop while strategy is not empty
     while (need['red'] > 0, need['green'] > 0, need['blue'] > 0, need['dark'] > 0):
         need = strat.Strategy().retrieve_as_need()
-        print(f"{red_cart} : {need['red']}")
-        print(f"{green_cart} : {need['green']}")
         # Loop while there is need
         while (red_cart < need['red']) or (green_cart < need['green']) or (blue_cart < need['blue']) or (dark_cart < need['dark']):
             marker = 0
@@ -297,7 +295,6 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                     connection.execute(decrease_dark_potions)
                 if (red_cart >= need['red'] and green_cart >= need['green'] and blue_cart >= need['blue'] and dark_cart >= need['dark']):
                     # break out of the loop. we've fulfilled the need
-                    print("breaking out of loop")
                     break
         except Exception as e:
             print(e)

@@ -65,7 +65,6 @@ class Strategy():
                     elif color == "dark":
                         need['dark'] += ml_quantity * row.quantity
 
-            print(f"FROM STRAT TABLE CLASS {need}")
             return need
 
     def update(self, new_strat):
