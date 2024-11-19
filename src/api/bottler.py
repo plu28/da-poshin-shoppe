@@ -33,6 +33,13 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     # Retrieves current ml in strategy
     need = strat.Strategy().retrieve_as_need()
 
+    # Check idempotency query 
+    idempotency_check_query = sqlalchemy.text('''
+        SELECT 1
+        FROM poshin_ledger
+        WHERE transaction_id = :order_id
+    ''')
+
     insert_ml_query = sqlalchemy.text(f'''
         INSERT INTO ml_ledger (red, green, blue, dark, transaction_id)
         SELECT -(:red), -(:green), -(:blue), -(:dark), :order_id
@@ -52,15 +59,16 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
         SELECT strategy.sku, strategy.quantity, :order_id
         FROM strategy
         WHERE strategy.quantity > 0
-        AND NOT EXISTS (
-            SELECT 1
-            FROM poshin_ledger
-            WHERE transaction_id = :order_id
-        )
     ''')
 
     try:
         with db.engine.begin() as connection:
+            idempotency = connection.execute(idempotency_check_query, {'order_id': order_id})
+            if idempotency.rowcount != 0:
+                # this call has already been made
+                print("BOTTLER DELIVER: idempotency detected")
+                return "OK"
+
             insert_ml = connection.execute(insert_ml_query, {
                 'red': need['red'],
                 'green': need['green'],

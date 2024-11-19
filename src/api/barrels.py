@@ -38,6 +38,16 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     blue = 0
     dark = 0
 
+    # Check idempotency query 
+    idempotency_check_query = sqlalchemy.text('''
+        SELECT
+            transaction_id
+        FROM
+            gold_ledger
+        WHERE
+            transaction_id = :order_id
+    ''')
+
     for barrel in barrels_delivered:
         barrel_cost -= (barrel.price * barrel.quantity)
         if barrel.potion_type == [1,0,0,0]:
@@ -72,14 +82,6 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
             WHERE
                 gold >= -(:barrel_cost)
             )
-        AND NOT EXISTS (
-            SELECT
-                transaction_id
-            FROM
-                gold_ledger
-            WHERE
-                transaction_id = :order_id
-        )
     '''
 
     insert_gold_ledger_query = sqlalchemy.text(f'''
@@ -103,6 +105,12 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     )
     with db.engine.begin() as connection:
         try:
+            idempotency = connection.execute(idempotency_check_query, {'order_id': order_id})
+            if idempotency.rowcount != 0:
+                # this call has already been made
+                print("BARRELS DELIVER: idempotency detected")
+                return "OK"
+
             insert_ml = connection.execute(insert_ml_ledger_query,
                 {
                     'red_ml': red,
