@@ -30,6 +30,7 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
+    print(f"BARRELS_DELIVERED: {barrels_delivered}, ORDER_ID: {order_id}")
 
     # Get how much im paying and how much im buying from these barrels
     barrel_cost = 0
@@ -314,4 +315,5 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             "sku": barrel_sku,
             "quantity": quantity
         })
+    print(f"RETURN_LIST: {return_list}")
     return json.loads(json.dumps(return_list))

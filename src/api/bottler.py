@@ -27,6 +27,8 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     """ """
     log.post_log(f"/deliver/{order_id}")
 
+    print(f"POTIONS_DELIVERED: {potions_delivered} ORDER_ID: {order_id}")
+
     if len(potions_delivered) == 0:
         return "OK"
 
@@ -168,40 +170,3 @@ def get_bottle_plan():
 
 if __name__ == "__main__":
     print(get_bottle_plan())
-
-# [
-#   {
-#     "sku": "SMALL_RED_BARREL",
-#     "ml_per_barrel": 500,
-#     "potion_type": [1,0,0,0],
-#     "price": 100,
-#     "quantity": 2
-#   },
-  # {
-  #   "sku": "SMALL_GREEN_BARREL",
-  #   "ml_per_barrel": 500,
-  #   "potion_type": [0,1,0,0],
-  #   "price": 100,
-  #   "quantity": 1
-  # },
-  # {
-  #     "sku": "MINI_GREEN_BARREL",
-  #     "ml_per_barrel": 200,
-  #     "potion_type": [0,1,0,0],
-  #     "price": 60,
-  #     "quantity": 1
-  # }
-#   {
-#     "sku": "SMALL_BLUE_BARREL",
-#     "ml_per_barrel": 500,
-#     "potion_type": [0,0,1,0],
-#     "price": 100,
-#     "quantity": 2
-#   }
-# ]
-# [
-#   {
-#     "sku": "MINI_GREEN_BARREL",
-#     "quantity": 1
-#   }
-# ]
